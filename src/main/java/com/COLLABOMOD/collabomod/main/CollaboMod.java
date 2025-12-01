@@ -28,6 +28,7 @@ public class CollaboMod {
         ItemRegister.register(eventBus);
         //ブロックの登録
         BlockRegister.register(eventBus);
+        
 
     }
 
