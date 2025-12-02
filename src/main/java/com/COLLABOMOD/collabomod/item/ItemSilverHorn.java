@@ -15,10 +15,13 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
 public class ItemSilverHorn extends Item{
+    private final float hardwarePerformance = 1.5F;
     public ItemSilverHorn() {
         // スタック不可、耐久値なし
         super(new Item.Properties().tab(CollaboMod.COLLABOMOD_TAB).stacksTo(1));
     }
+    // シルバー・ホーンは高性能
+
 
     // トライデントは「長押し連射」ではなく「精密射撃（単発）」
     // 右クリックした瞬間に発動する処理に戻します
@@ -27,15 +30,30 @@ public class ItemSilverHorn extends Item{
         if (!level.isClientSide) {
             player.getCapability(MagicStatsProvider.PLAYER_MAGIC_STATS).ifPresent(stats -> {
 
-                int cost = 300; // 必殺技なのでコスト激重
+                // ■ 失敗判定（必殺技なので負荷が高いとさらに失敗しやすい）
+                int stress = stats.getMentalLoad();
+                if (stress > 60) {
+                    if (level.random.nextInt(100) < (stress - 60) * 3) {
+                        handleFizzle(level, player);
+                        return; // 中断
+                    }
+                }
 
+                int cost = 300;
                 if (stats.getCurrentPsion() >= cost) {
                     stats.setCurrentPsion(stats.getCurrentPsion() - cost);
 
-                    // 分解魔法弾の発射
+                    // ■ ストレス蓄積（大技なので一気に溜まる）
+                    stats.addMentalLoad(25);
+
+                    // ■ 威力計算（分解魔法は即死ですが、貫通力などに影響させるイメージ）
+                    // ここでは弾速や精度にボーナスを与えるなどにしても良い
+                    float talentFactor = stats.getCalculationArea() / 100.0F;
+
                     EntityMistDispersion magic = new EntityMistDispersion(level, player);
-                    // 精度：ブレなし（0.0F）、速度：超高速（5.0F）
-                    magic.shootFromRotation(player, player.getXRot(), player.getYRot(), 0.0F, 5.0F, 0.0F);
+                    // 性能が良いので弾速も速い
+                    float speed = 5.0F * this.hardwarePerformance;
+                    magic.shootFromRotation(player, player.getXRot(), player.getYRot(), 0.0F, speed, 0.0F);
                     level.addFreshEntity(magic);
 
                     // 発射音：鋭い音
@@ -52,5 +70,11 @@ public class ItemSilverHorn extends Item{
             });
         }
         return InteractionResultHolder.success(player.getItemInHand(hand));
+    }
+    private void handleFizzle(Level level, Player player) {
+        level.playSound(null, player.getX(), player.getY(), player.getZ(),
+                SoundEvents.GLASS_BREAK, SoundSource.PLAYERS, 1.0F, 0.5F);
+        player.hurt(net.minecraft.world.damagesource.DamageSource.MAGIC, 6.0F); // 大技失敗は痛い
+        player.sendMessage(new net.minecraft.network.chat.TextComponent("§c術式解散失敗！逆流が発生！"), Util.NIL_UUID);
     }
 }

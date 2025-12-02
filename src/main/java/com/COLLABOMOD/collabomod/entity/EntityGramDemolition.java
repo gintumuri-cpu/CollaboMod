@@ -14,8 +14,13 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraftforge.network.NetworkHooks;
 
 public class EntityGramDemolition extends ThrowableProjectile {
+    private float damageMultiplier = 1.0F;
     public EntityGramDemolition(EntityType<? extends ThrowableProjectile> type, Level level) {
         super(type, level);
+    }
+
+    public void setDamageMultiplier(float mul) {
+        this.damageMultiplier = mul;
     }
 
     public EntityGramDemolition(Level level, LivingEntity shooter) {
@@ -58,8 +63,11 @@ public class EntityGramDemolition extends ThrowableProjectile {
         super.onHitEntity(result);
         Entity target = result.getEntity();
 
-        // 威力設定：魔法ダメージ（防御無視に近い）で「10ダメージ（ハート5個）」
-        target.hurt(DamageSource.MAGIC, 10.0F);
+        // 変更: 計算されたダメージを適用
+        float baseDamage = 10.0F;
+        float finalDamage = baseDamage * this.damageMultiplier;
+
+        target.hurt(DamageSource.MAGIC, finalDamage);
 
         // 強烈な衝撃（ノックバック）を与える
         target.setDeltaMovement(target.getDeltaMovement().add(this.getDeltaMovement().normalize().scale(1.5)));
