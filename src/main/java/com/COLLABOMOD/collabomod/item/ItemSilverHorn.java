@@ -32,19 +32,19 @@ public class ItemSilverHorn extends Item{
 
                 // ■ 失敗判定（必殺技なので負荷が高いとさらに失敗しやすい）
                 int stress = stats.getMentalLoad();
-                if (stress > 60) {
-                    if (level.random.nextInt(100) < (stress - 60) * 3) {
+                if (stress > 80) {
+                    if (level.random.nextInt(100) < (stress - 80) * 2) {
                         handleFizzle(level, player);
                         return; // 中断
                     }
                 }
 
-                int cost = 300;
+                int cost = 30;
                 if (stats.getCurrentPsion() >= cost) {
                     stats.setCurrentPsion(stats.getCurrentPsion() - cost);
 
                     // ■ ストレス蓄積（大技なので一気に溜まる）
-                    stats.addMentalLoad(25);
+                    stats.addMentalLoad(4);
 
                     // ■ 威力計算（分解魔法は即死ですが、貫通力などに影響させるイメージ）
                     // ここでは弾速や精度にボーナスを与えるなどにしても良い
@@ -58,14 +58,17 @@ public class ItemSilverHorn extends Item{
 
                     // 発射音：鋭い音
                     level.playSound(null, player.getX(), player.getY(), player.getZ(),
-                            SoundEvents.TRIDENT_RIPTIDE_3, SoundSource.PLAYERS, 1.0F, 2.0F);
+                            SoundEvents.TRIDENT_RIPTIDE_1, SoundSource.PLAYERS, 0.5F, 2.5F);
 
                     player.sendMessage(new TextComponent("対象を消去します"), Util.NIL_UUID);
 
                 } else {
-                    player.sendMessage(new TextComponent("想子不足：分解魔法には300が必要です"), Util.NIL_UUID);
-                    level.playSound(null, player.getX(), player.getY(), player.getZ(),
-                            SoundEvents.DISPENSER_FAIL, SoundSource.PLAYERS, 1.0F, 1.0F);
+//                    player.sendMessage(new TextComponent("想子不足：分解魔法には300が必要です"), Util.NIL_UUID);
+//                    level.playSound(null, player.getX(), player.getY(), player.getZ(),
+//                            SoundEvents.DISPENSER_FAIL, SoundSource.PLAYERS, 1.0F, 1.0F);
+                    if (player.tickCount % 20 == 0) { // 連打した時にうるさくないように
+                        player.sendMessage(new TextComponent("想子不足"), Util.NIL_UUID);
+                    }
                 }
             });
         }
@@ -73,8 +76,8 @@ public class ItemSilverHorn extends Item{
     }
     private void handleFizzle(Level level, Player player) {
         level.playSound(null, player.getX(), player.getY(), player.getZ(),
-                SoundEvents.GLASS_BREAK, SoundSource.PLAYERS, 1.0F, 0.5F);
-        player.hurt(net.minecraft.world.damagesource.DamageSource.MAGIC, 6.0F); // 大技失敗は痛い
+                SoundEvents.GLASS_BREAK, SoundSource.PLAYERS, 1.0F, 1.5F);
+        player.hurt(net.minecraft.world.damagesource.DamageSource.MAGIC, 2.0F);
         player.sendMessage(new net.minecraft.network.chat.TextComponent("§c術式解散失敗！逆流が発生！"), Util.NIL_UUID);
     }
 }

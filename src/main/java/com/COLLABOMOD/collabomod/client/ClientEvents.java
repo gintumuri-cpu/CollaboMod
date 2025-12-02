@@ -32,6 +32,10 @@ public class ClientEvents {
             Player player = mc.player;
             if (player == null || player.isSpectator()) return;
 
+            if (isElementalSightActive) {
+                drawInformationWorldOverlay(event.getMatrixStack(), mc);
+            }
+
             // ■ 変更点1: CADを持っているかチェック
             ItemStack mainHand = player.getMainHandItem();
             ItemStack offHand = player.getOffhandItem();
@@ -47,6 +51,29 @@ public class ClientEvents {
             // CADを持っていなくても、負荷が高ければ見えるようにする
             drawStressOverlay(event.getMatrixStack(), mc, player);
         }
+    }
+
+    // ★新規メソッド: 画面全体を青く染めるオーバーレイ
+    private static void drawInformationWorldOverlay(PoseStack poseStack, Minecraft mc) {
+        int width = mc.getWindow().getGuiScaledWidth();
+        int height = mc.getWindow().getGuiScaledHeight();
+
+        // 半透明のシアン色 (Alpha: 40, R: 0, G: 50, B: 150)
+        // 色コード: 0x28003296 (ARGB)
+        // 濃すぎると見づらいので薄めに設定しています
+        int color = 0x400088FF;
+
+        RenderSystem.disableDepthTest();
+        RenderSystem.depthMask(false);
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+
+        // 画面いっぱいに四角形を描画
+        GuiComponent.fill(poseStack, 0, 0, width, height, color);
+
+        RenderSystem.depthMask(true);
+        RenderSystem.enableDepthTest();
     }
 
     // サイオンゲージ描画（引数を少し整理）
@@ -132,7 +159,40 @@ public class ClientEvents {
                             player.playSound(SoundEvents.NOTE_BLOCK_BASEDRUM, 1.0F, 0.5F);
                         }
                     }
+                    if (mc.player != null && mc.level != null) {
+                        // サイトONの時
+                        if (isElementalSightActive) {
+                            for (net.minecraft.world.entity.Entity entity : mc.level.entitiesForRendering()) {
+                                if (entity instanceof net.minecraft.world.entity.LivingEntity && entity != mc.player) {
+                                    if (mc.player.distanceTo(entity) < 50) { // 半径50m
+                                        // 発光させる
+                                        entity.setGlowingTag(true);
+                                    }
+                                }
+                            }
+                        }
+                        // サイトOFFの時 (本来は明示的に消すべきですが、マイクラの仕様でGlowingは毎フレーム更新しないと消えることが多いので放置でも消えます)
+                        // 確実に消すなら、isElementalSightActiveがfalseになった瞬間に全エンティティのGlowingをfalseにする処理が必要です
+                    }
                 });
+            }
+        }
+    }
+    public static boolean isElementalSightActive = false;
+    // キー入力イベント（切り替え処理）
+    @SubscribeEvent
+    public static void onKeyInput(net.minecraftforge.client.event.InputEvent.KeyInputEvent event) {
+        if (KeyInit.ELEMENTAL_SIGHT_KEY.consumeClick()) {
+            isElementalSightActive = !isElementalSightActive;
+
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player != null) {
+                // 音を鳴らす（起動音/終了音）
+                float pitch = isElementalSightActive ? 1.5F : 0.5F;
+                mc.player.playSound(SoundEvents.BEACON_ACTIVATE, 0.5F, pitch);
+
+                mc.player.displayClientMessage(new net.minecraft.network.chat.TextComponent(
+                        isElementalSightActive ? "§b[情報体次元] 視覚連結" : "§7[情報体次元] 連結解除"), true);
             }
         }
     }
