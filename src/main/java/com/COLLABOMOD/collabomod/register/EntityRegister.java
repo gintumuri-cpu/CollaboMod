@@ -1,6 +1,7 @@
 package com.COLLABOMOD.collabomod.register;
 
 import com.COLLABOMOD.collabomod.entity.EntityGramDemolition;
+import com.COLLABOMOD.collabomod.entity.EntityMistDispersion;
 import com.COLLABOMOD.collabomod.main.CollaboMod;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
@@ -19,6 +20,12 @@ public class EntityRegister {
                     .clientTrackingRange(4) // 描画距離
                     .updateInterval(20)
                     .build("gram_demolition"));
+    public static final RegistryObject<EntityType<EntityMistDispersion>> MIST_DISPERSION = ENTITIES.register("mist_dispersion",
+            () -> EntityType.Builder.<EntityMistDispersion>of(EntityMistDispersion::new, MobCategory.MISC)
+                    .sized(0.2F, 0.2F) // 弾は小さく目立たない
+                    .clientTrackingRange(4)
+                    .updateInterval(20)
+                    .build("mist_dispersion"));
 
     public static void register(IEventBus eventBus) {
 
