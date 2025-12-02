@@ -1,5 +1,9 @@
 package com.COLLABOMOD.collabomod.main;
 
+import com.COLLABOMOD.collabomod.register.EntityRegister;
+import net.minecraft.client.renderer.entity.EntityRenderers;
+import net.minecraft.client.renderer.entity.NoopRenderer;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import com.COLLABOMOD.collabomod.main.tab.CollaboModBlockTab;
 import com.COLLABOMOD.collabomod.main.tab.CollaboModTab;
 import com.COLLABOMOD.collabomod.network.NetworkHandler;
@@ -30,11 +34,14 @@ public class CollaboMod {
         //ブロックの登録
         BlockRegister.register(eventBus);
         NetworkHandler.register();
-        
+        EntityRegister.register(eventBus);
 
     }
 
-    private void commonSetup(final FMLCommonSetupEvent event){
-
-    }
+    private void commonSetup(final FMLCommonSetupEvent event){}
+        private void clientSetup(final FMLClientSetupEvent event) {
+            // グラム・デモリッションはモデルを持たず、パーティクルだけで表現するため
+            // "NoopRenderer"（何もしないレンダラー＝透明）を割り当てます
+            EntityRenderers.register(EntityRegister.GRAM_DEMOLITION.get(), NoopRenderer::new);
+        }
 }

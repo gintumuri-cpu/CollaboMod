@@ -1,17 +1,21 @@
 package com.COLLABOMOD.collabomod.item;
 
 import com.COLLABOMOD.collabomod.capability.MagicStatsProvider;
+import com.COLLABOMOD.collabomod.entity.EntityGramDemolition;
 import com.COLLABOMOD.collabomod.main.CollaboMod;
 import net.minecraft.Util;
 import net.minecraft.network.chat.TextComponent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.SpectralArrow;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.UseAnim;
 import net.minecraft.world.level.Level;
 
 public class ItemCAD extends Item{
@@ -21,45 +25,99 @@ public class ItemCAD extends Item{
     }
 
     @Override
+    public UseAnim getUseAnimation(ItemStack stack) {
+        return UseAnim.BOW;
+    }
+
+    // 2. 最大使用時間（右クリックを押し続けられる時間）
+    // 72000tick = 1時間。実質無限に構えていられる設定
+    @Override
+    public int getUseDuration(ItemStack stack) {
+        return 72000;
+    }
+
+    // 3. 右クリック「開始時」の処理（起動式の展開）
+    @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
-        // サーバー側でのみ処理を行う（重要なデータ変更やスポーン処理のため）
-        if (!level.isClientSide) {
+        ItemStack itemstack = player.getItemInHand(hand);
 
-            // Capability（魔法ステータス）を取得
-            player.getCapability(MagicStatsProvider.PLAYER_MAGIC_STATS).ifPresent(stats -> {
+        // 使用状態（構え）を開始する必須メソッド
+        player.startUsingItem(hand);
 
-                int cost = 50; // 消費コスト
+        // 起動音（システム起動のような音）
+        level.playSound(null, player.getX(), player.getY(), player.getZ(),
+                SoundEvents.BEACON_ACTIVATE, SoundSource.PLAYERS, 1.0F, 1.0F);
 
-                // MPが足りているか判定
-                if (stats.getCurrentPsion() >= cost) {
-                    // 1. MPを消費
-                    stats.setCurrentPsion(stats.getCurrentPsion() - cost);
+        return InteractionResultHolder.consume(itemstack);
+    }
 
-                    // 2. 魔法発動（ここでは仮に「光の矢」を発射）
-                    // 本来は独自の魔法エンティティを作りますが、まずはバニラの光る矢で代用
-                    SpectralArrow magicProjectile = new SpectralArrow(level, player);
-                    magicProjectile.shootFromRotation(player, player.getXRot(), player.getYRot(), 0.0F, 3.0F, 1.0F);
-                    // ダメージを少し上げる（魔法っぽく）
-                    magicProjectile.setBaseDamage(8.0);
+    // 4. 右クリック「継続中」の処理（ループ・キャスト本体）
+    // 毎tick（1/20秒ごと）に呼ばれ続けます
+    @Override
+    public void onUseTick(Level level, LivingEntity livingEntity, ItemStack stack, int count) {
+        // サーバー側かつ、使っているのがプレイヤーである場合のみ実行
+        if (!level.isClientSide && livingEntity instanceof Player player) {
 
-                    level.addFreshEntity(magicProjectile);
+            // 押し始めからの経過tick数を計算
+            // getUseDuration(72000) から count(減っていく数値) を引く
+            int duration = this.getUseDuration(stack) - count;
 
-                    // 3. 音を鳴らす（エンダーマンのテレポート音が魔法っぽい）
-                    level.playSound(null, player.getX(), player.getY(), player.getZ(),
-                            SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 1.0F, 1.5F);
-
-                    player.sendMessage(new TextComponent("術式解凍... 発動！"), Util.NIL_UUID);
-
-                } else {
-                    // MP不足のメッセージ
-                    player.sendMessage(new TextComponent("想子（サイオン）不足！"), Util.NIL_UUID);
-                    // 失敗音
-                    level.playSound(null, player.getX(), player.getY(), player.getZ(),
-                            SoundEvents.DISPENSER_FAIL, SoundSource.PLAYERS, 1.0F, 1.0F);
-                }
-            });
+            // --- 連射速度の設定 ---
+            // 「5tickに1回」発射する（0.25秒間隔）
+            // 数値を小さくすると連射が速くなり、大きくすると遅くなる
+            if (duration % 5 == 0) {
+                castMagic(level, player);
+            }
         }
+    }
 
-        return InteractionResultHolder.success(player.getItemInHand(hand));
+    // 魔法発射のロジックを分離
+    private void castMagic(Level level, Player player) {
+        player.getCapability(MagicStatsProvider.PLAYER_MAGIC_STATS).ifPresent(stats -> {
+
+            int cost = 20; // 連射するのでコストは少し安めに設定
+
+            // MPチェック
+            if (stats.getCurrentPsion() >= cost) {
+                // 消費
+                stats.setCurrentPsion(stats.getCurrentPsion() - cost);
+
+                // --- 弾の発射処理 ---
+
+                // ★将来的にここを「EntityGramDemolition」などの自作弾丸に差し替えます
+                // 今は仮で「光の矢」を発射
+                EntityGramDemolition projectile = new EntityGramDemolition(level, player);
+
+                // 向きと速度設定 (速度を 3.0F -> 4.0F に上げて、魔法っぽい高速弾にする)
+                // 最後の引数(1.0F)はバラけ具合。連射するので少しバラけさせると制圧射撃っぽくなる
+                projectile.shootFromRotation(player, player.getXRot(), player.getYRot(), 0.0F, 4.0F, 1.0F);
+
+                // ワールドに追加
+                level.addFreshEntity(projectile);
+
+                // 音を変更：トライデントの「ズガッ」という音が重量感があって合う
+                level.playSound(null, player.getX(), player.getY(), player.getZ(),
+                        SoundEvents.TRIDENT_THROW, SoundSource.PLAYERS, 1.0F, 0.5F); // ピッチを下げて重くする
+
+            } else {
+                // MP不足時
+                // 連続でメッセージが出るとうるさいので、一定間隔（1秒に1回など）だけ警告音を鳴らす
+                if (player.tickCount % 20 == 0) {
+                    level.playSound(null, player.getX(), player.getY(), player.getZ(),
+                            SoundEvents.DISPENSER_FAIL, SoundSource.PLAYERS, 0.5F, 1.0F);
+                    player.sendMessage(new TextComponent("想子不足"), Util.NIL_UUID);
+                }
+            }
+        });
+    }
+
+    // 5. 右クリックを離した時の処理（終了）
+    @Override
+    public void releaseUsing(ItemStack stack, Level level, LivingEntity livingEntity, int timeCharged) {
+        if (!level.isClientSide) {
+            // 終了音（システムダウンのような音）
+            level.playSound(null, livingEntity.getX(), livingEntity.getY(), livingEntity.getZ(),
+                    SoundEvents.BEACON_DEACTIVATE, SoundSource.PLAYERS, 1.0F, 1.0F);
+        }
     }
 }
