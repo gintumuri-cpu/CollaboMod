@@ -2,6 +2,7 @@ package com.COLLABOMOD.collabomod.main;
 
 import com.COLLABOMOD.collabomod.main.tab.CollaboModBlockTab;
 import com.COLLABOMOD.collabomod.main.tab.CollaboModTab;
+import com.COLLABOMOD.collabomod.network.NetworkHandler;
 import com.COLLABOMOD.collabomod.register.BlockRegister;
 import com.COLLABOMOD.collabomod.register.ItemRegister;
 import net.minecraft.world.item.CreativeModeTab;
@@ -13,7 +14,7 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 @Mod("collabo_mod")
 public class CollaboMod {
     //Mod_ID
-    public static final String MOD_ID = "collabomod";
+    public static final String MOD_ID = "collabo_mod";
     //クリエイティブタブの登録
     public static final CreativeModeTab COLLABOMOD_TAB = new CollaboModTab();
     public static final CreativeModeTab COLLABOMOD_BLOCK_TAB = new CollaboModBlockTab();
@@ -28,6 +29,7 @@ public class CollaboMod {
         ItemRegister.register(eventBus);
         //ブロックの登録
         BlockRegister.register(eventBus);
+        NetworkHandler.register();
         
 
     }
