@@ -38,11 +38,8 @@ public class CollaboMod {
 
     }
 
-    private void commonSetup(final FMLCommonSetupEvent event){}
-        private void clientSetup(final FMLClientSetupEvent event) {
-            // グラム・デモリッションはモデルを持たず、パーティクルだけで表現するため
-            // "NoopRenderer"（何もしないレンダラー＝透明）を割り当てます
-            EntityRenderers.register(EntityRegister.GRAM_DEMOLITION.get(), NoopRenderer::new);
-            EntityRenderers.register(EntityRegister.MIST_DISPERSION.get(), NoopRenderer::new);
-        }
+    private void commonSetup(final FMLCommonSetupEvent event){
+
+    }
+
 }

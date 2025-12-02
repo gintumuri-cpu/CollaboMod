@@ -1,6 +1,9 @@
 package com.COLLABOMOD.collabomod.main;
 
 
+import com.COLLABOMOD.collabomod.register.EntityRegister;
+import net.minecraft.client.renderer.entity.EntityRenderers;
+import net.minecraft.client.renderer.entity.NoopRenderer;
 import net.minecraftforge.api.distmarker.Dist;
 
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -12,6 +15,10 @@ public class ClientEventBusSubscriber {
 
     @SubscribeEvent
     public static void onClientSetup(FMLClientSetupEvent event) {
-
+            // グラム・デモリッションはモデルを持たず、パーティクルだけで表現するため
+            // "NoopRenderer"（何もしないレンダラー＝透明）を割り当てます
+            EntityRenderers.register(EntityRegister.GRAM_DEMOLITION.get(), NoopRenderer::new);
+            EntityRenderers.register(EntityRegister.MIST_DISPERSION.get(), NoopRenderer::new);
+        }
     }
-}
+
