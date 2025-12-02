@@ -1,8 +1,10 @@
 package com.COLLABOMOD.collabomod.main;
 
+import com.COLLABOMOD.collabomod.command.PsionCommand;
 import com.COLLABOMOD.collabomod.register.EntityRegister;
 import net.minecraft.client.renderer.entity.EntityRenderers;
 import net.minecraft.client.renderer.entity.NoopRenderer;
+import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import com.COLLABOMOD.collabomod.main.tab.CollaboModBlockTab;
 import com.COLLABOMOD.collabomod.main.tab.CollaboModTab;
@@ -39,7 +41,9 @@ public class CollaboMod {
     }
 
     private void commonSetup(final FMLCommonSetupEvent event){
-
+    }
+    private void onRegisterCommands(RegisterCommandsEvent event) {
+        PsionCommand.register(event.getDispatcher());
     }
 
 }
