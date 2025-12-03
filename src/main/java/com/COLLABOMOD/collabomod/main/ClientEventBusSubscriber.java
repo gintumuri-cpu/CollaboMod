@@ -1,8 +1,10 @@
 package com.COLLABOMOD.collabomod.main;
 
 
+import com.COLLABOMOD.collabomod.client.KeyInit;
 import com.COLLABOMOD.collabomod.register.EntityRegister;
 import net.minecraft.client.renderer.entity.EntityRenderers;
+import com.COLLABOMOD.collabomod.client.renderer.RenderMaterialBurst;
 import net.minecraft.client.renderer.entity.NoopRenderer;
 import net.minecraftforge.api.distmarker.Dist;
 
@@ -19,7 +21,10 @@ public class ClientEventBusSubscriber {
             // "NoopRenderer"（何もしないレンダラー＝透明）を割り当てます
             EntityRenderers.register(EntityRegister.GRAM_DEMOLITION.get(), NoopRenderer::new);
             EntityRenderers.register(EntityRegister.MIST_DISPERSION.get(), NoopRenderer::new);
-            EntityRenderers.register(EntityRegister.MATERIAL_BURST.get(), NoopRenderer::new);
+            KeyInit.register();
+
+            // ■ 修正: マテリアル・バーストに専用レンダラーを割り当て
+            EntityRenderers.register(EntityRegister.MATERIAL_BURST.get(), RenderMaterialBurst::new);
         }
     }
 

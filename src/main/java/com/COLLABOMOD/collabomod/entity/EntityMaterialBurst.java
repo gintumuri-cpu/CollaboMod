@@ -27,18 +27,17 @@ import net.minecraft.world.phys.AABB;
 import net.minecraftforge.network.NetworkHooks;
 
 import java.util.List;
+import java.util.Random;
 
 public class EntityMaterialBurst extends Entity {
 
     private static final EntityDataAccessor<Float> CURRENT_RADIUS = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
 
-    private float maxRadius = 150.0F;//最終的な半径（50ブロック＝直径100ブロックのクレーター）
-    private float expansionSpeed = 0.75F; // 広がる速度を少しアップ
+    // ■ 修正: 半径60.0F (直径120ブロック)
+    private float maxRadius = 65.0F;
+    private float expansionSpeed = 0.25F;
 
-    // サイオンの光の色（シアン～白）
-    private static final Vector3f SPHERE_COLOR = new Vector3f(0.2F, 0.9F, 1.0F);
-
-    public EntityMaterialBurst(EntityType<?> type, Level level) {
+    public EntityMaterialBurst(EntityType<EntityMaterialBurst> type, Level level) {
         super(type, level);
         this.noCulling = true;
     }
@@ -65,25 +64,24 @@ public class EntityMaterialBurst extends Entity {
     public void tick() {
         super.tick();
 
-        float currentRadius = getRadius();
-        float prevRadius = currentRadius;
-
-        currentRadius += expansionSpeed;
+        float prevRadius = getRadius();
+        float currentRadius = prevRadius + expansionSpeed;
         setRadius(currentRadius);
 
-        // ■ クライアント側：高密度パーティクル球体
+        // クライアント側: 音の演出のみ（描画はRendererに任せる）
         if (this.level.isClientSide) {
-            spawnDenseSphereParticles(currentRadius);
-
-            // 轟音（サイズに応じてピッチを下げる＝巨大感を演出）
-            if (this.tickCount % 5 == 0) {
-                float pitch = 1.0F - (currentRadius / maxRadius) * 0.5F; // 1.0 -> 0.5
+            if (this.tickCount % 10 == 0) {
+                float pitch = 1.0F - Math.min(0.5F, (currentRadius / maxRadius) * 0.5F);
                 this.level.playLocalSound(this.getX(), this.getY(), this.getZ(),
-                        SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.WEATHER, 5.0F, pitch, false);
+                        SoundEvents.BEACON_AMBIENT, SoundSource.WEATHER, 50.0F, pitch, false);
+            }
+            // ■■■ 追加: 終了間際の残滓演出 ■■■
+            // 最大半径に近づいたら、フェードアウト用のパーティクルを出す
+            if (currentRadius >= maxRadius - 1.0F) {
+                spawnRemnantParticles(maxRadius);
             }
         }
-
-        // ■ サーバー側：質量変換
+        // サーバー側: 破壊処理
         else {
             if (currentRadius > maxRadius) {
                 this.discard();
@@ -94,7 +92,6 @@ public class EntityMaterialBurst extends Entity {
         }
     }
 
-    // ■ 修正: 水も溶岩も完全に消す破壊処理
     private void processDestruction(float minR, float maxR) {
         BlockPos center = this.blockPosition();
         int range = (int) Math.ceil(maxR);
@@ -104,23 +101,16 @@ public class EntityMaterialBurst extends Entity {
                 for (int z = -range; z <= range; z++) {
                     double distSq = x * x + y * y + z * z;
 
-                    // シェル（殻）の範囲内のみ処理
-                    if (distSq <= maxR * maxR && distSq > minR * minR) {
+                    // ■ 修正: minRが0の場合（初回）は、中心点（距離0）も含めるように条件分岐
+                    boolean isInsideInner = (minR == 0) ? false : (distSq <= minR * minR);
+
+                    if (distSq <= maxR * maxR && !isInsideInner) {
                         BlockPos targetPos = center.offset(x, y, z);
                         BlockState state = level.getBlockState(targetPos);
                         FluidState fluid = level.getFluidState(targetPos);
 
-                        // 空気でなければ消す（液体も含む）
-                        // !state.isAir() だけだと水源が消えないことがあるため、!fluid.isEmpty() もチェック
                         if (!state.isAir() || !fluid.isEmpty()) {
-
-                            // 岩盤などは除外（必要なら外してください）
                             if (state.getDestroySpeed(level, targetPos) < 0) continue;
-
-                            // ★重要: setBlockで強制的に「空気」にする
-                            // removeBlockはドロップ処理などが走るが、setBlock(AIR)は「置換」なので確実かつ軽量
-                            // flag 2 (ビット演算) = クライアントへ通知するが、隣接ブロックの更新（水流発生など）を通知しない
-                            // これにより水流の計算が発生しにくくなり、水抜きがスムーズになる
                             level.setBlock(targetPos, Blocks.AIR.defaultBlockState(), 2);
                         }
                     }
@@ -144,39 +134,30 @@ public class EntityMaterialBurst extends Entity {
         }
     }
 
-    // ■ 修正: 美しい球体エフェクトの描画
-    private void spawnDenseSphereParticles(float radius) {
-        // 色付きパーティクル（ダスト）を使用
-        // RGB (0.2, 0.9, 1.0) -> シアンブルー
-        // サイズ: 2.0F (少し大きめ)
-        ParticleOptions particle = new DustParticleOptions(SPHERE_COLOR, 50.0F);
-
-        // 半径が大きいほどパーティクル数を増やす（スカスカ防止）
-        // 表面積(4πr^2)に比例させると重すぎるので、半径に比例させる程度に調整
-        int count = (int)(radius * radius * 1.5);
-        if (count > 2000) count = 2000; // 上限設定（クライアント負荷対策）
+    private void spawnRemnantParticles(float radius) {
+        int count = 200; // クライアント負荷を考慮して程々に
+        Random rand = new Random();
 
         for (int i = 0; i < count; i++) {
-            // 球面上のランダムな点を計算（均一分布）
-            double z = random.nextDouble() * 2.0 - 1.0; // -1 to 1
-            double theta = random.nextDouble() * 2.0 * Math.PI; // 0 to 2π
-            double r = Math.sqrt(1.0 - z * z) * radius;
+            // 球の内部～表面にランダム配置
+            double r = radius * Math.sqrt(rand.nextDouble()); // 体積一様分布
+            double theta = rand.nextDouble() * 2 * Math.PI;
+            double phi = Math.acos(2 * rand.nextDouble() - 1);
 
-            double x = r * Math.cos(theta);
-            double y = r * Math.sin(theta);
-            double finalZ = z * radius;
+            double x = r * Math.sin(phi) * Math.cos(theta);
+            double y = r * Math.sin(phi) * Math.sin(theta);
+            double z = r * Math.cos(phi);
 
-            // 座標
-            double px = this.getX() + x;
-            double py = this.getY() + y;
-            double pz = this.getZ() + finalZ;
+            // 1. CAMPFIRE_SIGNAL_SMOKE: 長く残る白い煙（蒸発した物質）
+            this.level.addParticle(ParticleTypes.CAMPFIRE_SIGNAL_SMOKE,
+                    this.getX() + x, this.getY() + y, this.getZ() + z,
+                    0, 0.1, 0); // 少し上昇する
 
-            // パーティクル生成
-            this.level.addParticle(particle, px, py, pz, 0, 0, 0);
-
-            // 演出強化: 内部にも少し「FLASH」を入れて、エネルギーの塊感を出す
-            if (random.nextInt(100) == 0) {
-                this.level.addParticle(ParticleTypes.FLASH, px, py, pz, 0, 0, 0);
+            // 2. EXPLOSION: 爆発の余韻
+            if (i % 5 == 0) {
+                this.level.addParticle(ParticleTypes.EXPLOSION,
+                        this.getX() + x, this.getY() + y, this.getZ() + z,
+                        0, 0, 0);
             }
         }
     }
