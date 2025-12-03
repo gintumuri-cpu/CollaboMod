@@ -15,6 +15,15 @@ public class NetworkHandler {
 
     public static void register() {
         int id = 0;
-        INSTANCE.registerMessage(id++, PacketSyncMagicStats.class, PacketSyncMagicStats::encode, PacketSyncMagicStats::new, PacketSyncMagicStats::handle);
+        INSTANCE.registerMessage(id++,
+                PacketSyncMagicStats.class,
+                PacketSyncMagicStats::encode,
+                PacketSyncMagicStats::new,
+                PacketSyncMagicStats::handle);
+        INSTANCE.registerMessage(id++,
+                PacketMaterialBurst.class,
+                PacketMaterialBurst::toBytes,
+                PacketMaterialBurst::new,
+                PacketMaterialBurst::handle);
     }
 }

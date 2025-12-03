@@ -8,12 +8,14 @@ import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
+import com.COLLABOMOD.collabomod.item.ItemThirdEye;
 
 public class ItemRegister {
     public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, CollaboMod.MOD_ID);
 
     public static final RegistryObject<Item> TEST_CAD = ITEMS.register("test_cad", ItemCAD::new);
     public static final RegistryObject<Item> SILVER_HORN = ITEMS.register("silver_horn", ItemSilverHorn::new);
+    public static final RegistryObject<Item> THIRD_EYE = ITEMS.register("third_eye", ItemThirdEye::new);
 
     public static void register(IEventBus eventBus){
         ITEMS.register(eventBus);

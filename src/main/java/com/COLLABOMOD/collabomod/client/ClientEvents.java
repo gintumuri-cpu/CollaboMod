@@ -1,13 +1,18 @@
 package com.COLLABOMOD.collabomod.client;
+
 import com.COLLABOMOD.collabomod.capability.MagicStatsProvider;
 import com.COLLABOMOD.collabomod.item.ItemCAD;
 import com.COLLABOMOD.collabomod.item.ItemSilverHorn;
+import com.COLLABOMOD.collabomod.item.ItemThirdEye;
 import com.COLLABOMOD.collabomod.main.CollaboMod;
+import com.COLLABOMOD.collabomod.network.NetworkHandler;
+import com.COLLABOMOD.collabomod.network.PacketMaterialBurst;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiComponent;
 import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.TextComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvents;
@@ -18,12 +23,14 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.*;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import org.lwjgl.glfw.GLFW; // マウス入力検知用
 
 import java.lang.reflect.Method;
 
@@ -33,21 +40,42 @@ public class ClientEvents {
     private static final ResourceLocation GUI_ICONS = new ResourceLocation("minecraft", "textures/gui/icons.png");
 
     public static boolean isElementalSightActive = false;
+    // ■ 追加: サード・アイによる起動モードかどうか
+    public static boolean isThirdEyeMode = false;
+
     private static int sightTimer = 0;
     private static final int MAX_DURATION = 400;
     private static ArmorStand dummyCamera = null;
 
     @SubscribeEvent
     public static void onKeyInput(InputEvent.KeyInputEvent event) {
+        // 通常のキー起動（Vキー）
         if (KeyInit.ELEMENTAL_SIGHT_KEY.consumeClick()) {
             Minecraft mc = Minecraft.getInstance();
-            if (mc.player == null || mc.level == null) return;
+            toggleElementalSight(mc, false); // 通常モードで切替
+        }
+    }
 
-            if (!isElementalSightActive) {
-                startElementalSight(mc);
-            } else {
-                disableElementalSight(mc);
-            }
+    // ■ 追加: サード・アイから呼び出すメソッド
+    public static void toggleThirdEyeMode() {
+        Minecraft mc = Minecraft.getInstance();
+        // 既に通常モードで起動中なら一旦切る
+        if (isElementalSightActive && !isThirdEyeMode) {
+            disableElementalSight(mc);
+        }
+        // サード・アイモードで切替
+        toggleElementalSight(mc, true);
+    }
+
+    // 共通の切替ロジック
+    private static void toggleElementalSight(Minecraft mc, boolean thirdEye) {
+        if (mc.player == null || mc.level == null) return;
+
+        if (!isElementalSightActive) {
+            isThirdEyeMode = thirdEye; // モード設定
+            startElementalSight(mc);
+        } else {
+            disableElementalSight(mc);
         }
     }
 
@@ -66,15 +94,13 @@ public class ClientEvents {
 
         dummyCamera.setPos(startX, startY, startZ);
 
-        // ■ 重要: 初期の回転同期
-        // BodyRotだけでなく、HeadRotも合わせることでカメラの横回転が初期化される
+        // 回転同期
         dummyCamera.setYRot(mc.player.getYRot());
-        dummyCamera.setYHeadRot(mc.player.getYRot()); // 頭の向き
+        dummyCamera.setYHeadRot(mc.player.getYRot());
         dummyCamera.setXRot(mc.player.getXRot());
-
-        dummyCamera.xRotO = mc.player.getXRot();
         dummyCamera.yRotO = mc.player.getYRot();
-        dummyCamera.yHeadRotO = mc.player.getYRot(); // 古い頭の向きも
+        dummyCamera.yHeadRotO = mc.player.getYRot();
+        dummyCamera.xRotO = mc.player.getXRot();
 
         dummyCamera.setNoGravity(true);
         dummyCamera.setInvisible(true);
@@ -87,11 +113,17 @@ public class ClientEvents {
 
         mc.setCameraEntity(dummyCamera);
         mc.player.playSound(SoundEvents.BEACON_ACTIVATE, 0.5F, 1.5F);
-        mc.player.displayClientMessage(new TextComponent("§b[情報体次元] 視覚連結開始 - 自由視点モード"), true);
+
+        // モードに応じたメッセージ
+        String msg = isThirdEyeMode
+                ? "§c[サード・アイ] 照準シークエンス起動 - 発動点を視認して[攻撃]キー"
+                : "§b[情報体次元] 視覚連結開始 - 自由視点モード";
+        mc.player.displayClientMessage(new TextComponent(msg), true);
     }
 
     private static void disableElementalSight(Minecraft mc) {
         isElementalSightActive = false;
+        isThirdEyeMode = false; // モードリセット
         sightTimer = 0;
 
         if (mc.player != null) {
@@ -105,6 +137,37 @@ public class ClientEvents {
             dummyCamera = null;
         }
     }
+
+    // ■ 追加: マウス入力（左クリック）検知
+    // サード・アイモード中、左クリックで発動座標を決定する
+    @SubscribeEvent
+    public static void onMouseInput(InputEvent.MouseInputEvent event) {
+        Minecraft mc = Minecraft.getInstance();
+        if (isElementalSightActive && isThirdEyeMode && dummyCamera != null) {
+            // 左クリックが押されたら (GLFW_MOUSE_BUTTON_LEFT = 0)
+            if (event.getButton() == GLFW.GLFW_MOUSE_BUTTON_LEFT && event.getAction() == GLFW.GLFW_PRESS) {
+
+                // 幽体カメラの視線の先のブロックを取得（最大距離300）
+                HitResult result = dummyCamera.pick(300.0D, 0.0F, false);
+
+                if (result.getType() != HitResult.Type.MISS) {
+                    // 座標を取得
+                    BlockPos targetPos = new BlockPos(result.getLocation());
+
+                    // サーバーへパケット送信（発動要請）
+                    NetworkHandler.INSTANCE.sendToServer(new PacketMaterialBurst(targetPos));
+
+                    // エレメンタル・サイト終了
+                    disableElementalSight(mc);
+
+                    // クリックイベントを消費して、誤動作を防ぐ
+                    event.setCanceled(true);
+                }
+            }
+        }
+    }
+
+    // --- 以下、既存のイベント処理（変更なし） ---
 
     @SubscribeEvent
     public static void onRenderHand(RenderHandEvent event) {
@@ -125,31 +188,24 @@ public class ClientEvents {
             if (isElementalSightActive && dummyCamera != null) {
                 sightTimer--;
 
-                // ■■■ 修正1: 回転の完全同期 ■■■
-                // プレイヤーの操作に合わせてカメラを回すには、HeadRot(頭の向き)の同期が必須です
-
-                // 1. 体の向き (YRot)
+                // 回転同期
                 dummyCamera.setYRot(player.getYRot());
                 dummyCamera.yRotO = player.yRotO;
-
-                // 2. 頭の向き (YHeadRot) -> これがカメラの左右回転（Yaw）に直結します
                 dummyCamera.setYHeadRot(player.getYHeadRot());
                 dummyCamera.yHeadRotO = player.yHeadRotO;
-
-                // 3. 上下の向き (XRot) -> これがカメラの上下回転（Pitch）
                 dummyCamera.setXRot(player.getXRot());
                 dummyCamera.xRotO = player.xRotO;
 
-                // --- カメラ移動 (WASD) ---
+                // カメラ移動 (WASD)
                 handleCameraMovement(mc);
 
-                // --- ノイズ・終了処理 ---
+                // ノイズ・終了処理
                 if (sightTimer < 60 && sightTimer % 10 == 0) {
                     player.playSound(SoundEvents.ITEM_FRAME_ROTATE_ITEM, 0.5F, 0.5F + (60 - sightTimer) / 20.0F);
                 }
                 if (sightTimer <= 0) {
                     player.playSound(SoundEvents.GLASS_BREAK, 1.0F, 0.5F);
-                    player.displayClientMessage(new TextComponent("§c限界時間を超過。強制切断。"), false);
+                    // タイムアウト時は通常解除メッセージ
                     disableElementalSight(mc);
                 }
             }
@@ -162,51 +218,21 @@ public class ClientEvents {
         float speed = 0.5F;
         if (mc.options.keySprint.isDown()) speed = 1.0F;
 
-        // カメラの視線ベクトル
-        // プレイヤーと同期しているので、mc.player.getLookAngle()を使っても同じですが、
-        // 念のため dummyCamera から取得します
         Vec3 lookVec = dummyCamera.getLookAngle();
         Vec3 rightVec = lookVec.cross(new Vec3(0, 1, 0)).normalize();
 
-        double dx = 0;
-        double dy = 0;
-        double dz = 0;
+        double dx = 0; double dy = 0; double dz = 0;
 
-        // W (前進)
-        if (mc.options.keyUp.isDown()) {
-            dx += lookVec.x * speed;
-            dy += lookVec.y * speed;
-            dz += lookVec.z * speed;
-        }
-        // S (後退)
-        if (mc.options.keyDown.isDown()) {
-            dx -= lookVec.x * speed;
-            dy -= lookVec.y * speed;
-            dz -= lookVec.z * speed;
-        }
-
-        // ■■■ 修正2: A/Dの移動方向修正 ■■■
-        // 前回の修正で逆になってしまった符号を戻します
-
-        // A (左)
-        if (mc.options.keyRight.isDown()) {
-            dx += rightVec.x * speed;
-            dz += rightVec.z * speed;
-        }
-        // D (右)
-        if (mc.options.keyLeft.isDown()) {
-            dx -= rightVec.x * speed;
-            dz -= rightVec.z * speed;
-        }
-
-        // Space / Shift
+        if (mc.options.keyUp.isDown()) { dx += lookVec.x * speed; dy += lookVec.y * speed; dz += lookVec.z * speed; }
+        if (mc.options.keyDown.isDown()) { dx -= lookVec.x * speed; dy -= lookVec.y * speed; dz -= lookVec.z * speed; }
+        if (mc.options.keyLeft.isDown()) { dx += rightVec.x * speed; dz += rightVec.z * speed; }
+        if (mc.options.keyRight.isDown()) { dx -= rightVec.x * speed; dz -= rightVec.z * speed; }
         if (mc.options.keyJump.isDown()) dy += speed;
         if (mc.options.keyShift.isDown()) dy -= speed;
 
         dummyCamera.setPos(dummyCamera.getX() + dx, dummyCamera.getY() + dy, dummyCamera.getZ() + dz);
     }
 
-    // 入力無効化（肉体の移動のみロック）
     @SubscribeEvent
     public static void onInputUpdate(MovementInputUpdateEvent event) {
         if (isElementalSightActive) {
@@ -218,7 +244,6 @@ public class ClientEvents {
         }
     }
 
-    // --- 描画系（変更なし） ---
     @SubscribeEvent
     public static void onRenderLivingPre(RenderLivingEvent.Pre<LivingEntity, ?> event) {
         if (isElementalSightActive && dummyCamera != null) {
@@ -249,7 +274,8 @@ public class ClientEvents {
 
             if (isElementalSightActive) {
                 drawInformationWorldOverlay(event.getMatrixStack(), mc);
-                if (sightTimer < 60) {
+                // サード・アイモードならノイズは出さない（集中している演出）
+                if (!isThirdEyeMode && sightTimer < 60) {
                     drawNoiseOverlay(event.getMatrixStack(), mc, (60 - sightTimer));
                 }
             } else {
@@ -258,10 +284,9 @@ public class ClientEvents {
 
             ItemStack mainHand = player.getMainHandItem();
             ItemStack offHand = player.getOffhandItem();
-            boolean isHoldingCAD = (mainHand.getItem() instanceof ItemCAD || mainHand.getItem() instanceof ItemSilverHorn) ||
-                    (offHand.getItem() instanceof ItemCAD || offHand.getItem() instanceof ItemSilverHorn);
-
-            if (isHoldingCAD) {
+            boolean isHoldingCAD = (mainHand.getItem() instanceof ItemCAD || mainHand.getItem() instanceof ItemSilverHorn);
+            // サード・アイを持っている時もHUDを表示
+            if (isHoldingCAD || mainHand.getItem() instanceof ItemThirdEye || offHand.getItem() instanceof ItemThirdEye) {
                 drawPsionOverlay(event.getMatrixStack(), mc, player);
             }
         }
@@ -283,7 +308,8 @@ public class ClientEvents {
     private static void drawInformationWorldOverlay(PoseStack poseStack, Minecraft mc) {
         int width = mc.getWindow().getGuiScaledWidth();
         int height = mc.getWindow().getGuiScaledHeight();
-        int color = 0x400088FF;
+        // サード・アイモードなら少し赤みがかった色にする（警告色）
+        int color = isThirdEyeMode ? 0x40FF0000 : 0x400088FF;
         RenderSystem.disableDepthTest();
         RenderSystem.depthMask(false);
         RenderSystem.defaultBlendFunc();
@@ -292,45 +318,6 @@ public class ClientEvents {
         GuiComponent.fill(poseStack, 0, 0, width, height, color);
         RenderSystem.depthMask(true);
         RenderSystem.enableDepthTest();
-    }
-
-    // エレメンタル・サイト起動中、画面中央の対象の情報を表示
-    @SubscribeEvent
-    public static void onRenderGameOverlay(RenderGameOverlayEvent.Post event) {
-        if (event.getType() == RenderGameOverlayEvent.ElementType.ALL && isElementalSightActive) {
-            Minecraft mc = Minecraft.getInstance();
-            if (mc.hitResult instanceof net.minecraft.world.phys.EntityHitResult entityResult) {
-                Entity target = entityResult.getEntity();
-                if (target instanceof LivingEntity living) {
-                    drawEidosInfo(event.getMatrixStack(), mc, living);
-                }
-            }
-        }
-    }
-
-    private static void drawEidosInfo(PoseStack poseStack, Minecraft mc, LivingEntity target) {
-        int width = mc.getWindow().getGuiScaledWidth();
-        int height = mc.getWindow().getGuiScaledHeight();
-        int centerX = width / 2;
-        int centerY = height / 2;
-
-        // ターゲットの横に情報を出す
-        int x = centerX + 20;
-        int y = centerY - 20;
-
-        // エイドス情報テキスト
-        String name = "Target: " + target.getName().getString();
-        String hp = "HP: " + (int)target.getHealth() + " / " + (int)target.getMaxHealth();
-        String type = "Type: " + target.getType().getRegistryName().toString();
-
-        // 文字描画（シアン色でデジタル風に）
-        int color = 0x00FFFF;
-        mc.font.draw(poseStack, name, x, y, color);
-        mc.font.draw(poseStack, hp, x, y + 10, color);
-        mc.font.draw(poseStack, type, x, y + 20, color);
-
-        // 飾り線
-        GuiComponent.fill(poseStack, x - 2, y - 2, x - 1, y + 30, 0xFF00FFFF);
     }
 
     private static void drawNoiseOverlay(PoseStack poseStack, Minecraft mc, int intensity) {
