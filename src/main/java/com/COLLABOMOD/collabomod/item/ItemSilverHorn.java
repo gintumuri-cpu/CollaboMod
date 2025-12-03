@@ -8,35 +8,120 @@ import com.COLLABOMOD.collabomod.world.idea.EidosData;
 import com.COLLABOMOD.collabomod.world.idea.IdeaDimensionData;
 import net.minecraft.Util;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TextComponent;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.List;
 
 public class ItemSilverHorn extends Item {
 
     private final float hardwarePerformance = 2.0F;
 
+    // 定数: モードID
+    private static final int MODE_DECOMPOSITION = 0;
+    private static final int MODE_REGROWTH = 1;
+
     public ItemSilverHorn() {
         super(new Item.Properties().tab(CollaboMod.COLLABOMOD_TAB).stacksTo(1));
     }
 
+    // ■ ツールチップ（マウスホバー時にモードを表示）
+    @Override
+    public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
+        int mode = getMode(stack);
+        String modeName = (mode == MODE_DECOMPOSITION) ? "§c[分解 - Mist Dispersion]" : "§a[再成 - Regrowth]";
+        tooltip.add(new TextComponent("起動術式: " + modeName));
+        super.appendHoverText(stack, level, tooltip, flag);
+    }
+
+    // ■ 右クリック（空撃ち or モード切替）
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
+        ItemStack stack = player.getItemInHand(hand);
 
-        // --- サーバー側の処理（発射・判定） ---
+        // --- モード切替処理 (Shift + 右クリック) ---
+        if (player.isShiftKeyDown()) {
+            if (!level.isClientSide) {
+                cycleMode(stack, player);
+            }
+            return InteractionResultHolder.success(stack);
+        }
+
+        // --- 魔法発動処理 ---
+        int mode = getMode(stack);
+
+        // 1. 分解モードの場合 -> 発射
+        if (mode == MODE_DECOMPOSITION) {
+            executeDecomposition(level, player);
+            return InteractionResultHolder.success(stack);
+        }
+
+        // 2. 再成モードの場合 -> 空撃ち不可（対象が必要）
+        else {
+            if (!level.isClientSide) {
+                player.sendMessage(new TextComponent("§e再成モード: 対象に向けて使用してください"), Util.NIL_UUID);
+            }
+            return InteractionResultHolder.fail(stack);
+        }
+    }
+
+    // ■ エンティティへの右クリック（再成の発動）
+    @Override
+    public InteractionResult interactLivingEntity(ItemStack stack, Player player, LivingEntity target, InteractionHand hand) {
+        int mode = getMode(stack);
+
+        // 再成モードの時だけ、エンティティに対する処理を行う
+        if (mode == MODE_REGROWTH) {
+            if (!player.level.isClientSide && player.level instanceof ServerLevel serverLevel) {
+                castRegrowth(serverLevel, player, target);
+            }
+            return InteractionResult.SUCCESS;
+        }
+
+        // 分解モードなら何もしない（useメソッドに処理を流して撃つ）
+        return InteractionResult.PASS;
+    }
+
+    // --- ヘルパーメソッド: NBT操作 ---
+
+    private int getMode(ItemStack stack) {
+        CompoundTag tag = stack.getOrCreateTag();
+        return tag.getInt("CADMode");
+    }
+
+    private void cycleMode(ItemStack stack, Player player) {
+        CompoundTag tag = stack.getOrCreateTag();
+        int currentMode = tag.getInt("CADMode");
+        int newMode = (currentMode == MODE_DECOMPOSITION) ? MODE_REGROWTH : MODE_DECOMPOSITION;
+        tag.putInt("CADMode", newMode);
+
+        // 切替音とメッセージ
+        player.level.playSound(null, player.getX(), player.getY(), player.getZ(),
+                SoundEvents.COMPARATOR_CLICK, SoundSource.PLAYERS, 1.0F, 1.5F);
+
+        String modeName = (newMode == MODE_DECOMPOSITION) ? "§c起動術式: 分解 (Mist Dispersion)" : "§a起動術式: 再成 (Regrowth)";
+        player.displayClientMessage(new TextComponent(modeName), true); // アクションバーに表示
+    }
+
+    // --- 魔法ロジック (分解) ---
+    private void executeDecomposition(Level level, Player player) {
+        // サーバー側
         if (!level.isClientSide) {
-            // 変数名を 'serverStats' に変更して重複回避
             player.getCapability(MagicStatsProvider.PLAYER_MAGIC_STATS).ifPresent(serverStats -> {
-
                 int stress = serverStats.getMentalLoad();
                 if (stress > 80) {
                     if (level.getRandom().nextInt(100) < (stress - 80) * 2) {
@@ -46,7 +131,6 @@ public class ItemSilverHorn extends Item {
                 }
 
                 int cost = 30;
-
                 if (serverStats.getCurrentPsion() >= cost) {
                     serverStats.setCurrentPsion(serverStats.getCurrentPsion() - cost);
                     serverStats.addMentalLoad(4);
@@ -65,41 +149,24 @@ public class ItemSilverHorn extends Item {
             });
         }
 
-        // --- クライアント側の処理（パーティクル演出） ---
+        // クライアント側（パーティクル）
         if (level.isClientSide) {
-            // 変数名を 'clientStats' に変更して重複回避
             player.getCapability(MagicStatsProvider.PLAYER_MAGIC_STATS).ifPresent(clientStats -> {
                 if (clientStats.getCurrentPsion() >= 30) {
                     Vec3 look = player.getLookAngle();
                     Vec3 pos = player.getEyePosition().add(look.scale(1.0));
-
                     for (int i = 0; i < 3; i++) {
                         float dist = 0.5F * i;
                         float radius = 0.2F + (0.2F * i);
-
                         PsionParticleUtil.spawnPsionRing(level, pos.add(look.scale(dist)), look, radius, 30);
                     }
                 }
             });
         }
-
-        return InteractionResultHolder.success(player.getItemInHand(hand));
     }
 
-    // --- 再成魔法（Shift + 右クリック） ---
-    @Override
-    public net.minecraft.world.InteractionResult interactLivingEntity(ItemStack stack, Player player, LivingEntity target, InteractionHand hand) {
-        if (!player.level.isClientSide && player.level instanceof ServerLevel serverLevel) {
-            if (player.isShiftKeyDown()) {
-                castRegrowth(serverLevel, player, target);
-                return net.minecraft.world.InteractionResult.SUCCESS;
-            }
-        }
-        return super.interactLivingEntity(stack, player, target, hand);
-    }
-
+    // --- 魔法ロジック (再成) ---
     private void castRegrowth(ServerLevel level, Player player, LivingEntity target) {
-        // 変数名を 'rStats' (regrowthStats) に変更して重複回避
         player.getCapability(MagicStatsProvider.PLAYER_MAGIC_STATS).ifPresent(rStats -> {
             IdeaDimensionData idea = IdeaDimensionData.get(level);
             EidosData backup = idea.getPreviousEntityState(target.getUUID());
@@ -119,9 +186,14 @@ public class ItemSilverHorn extends Item {
                 if (damageDiff < 0) damageDiff = 0;
 
                 CompoundTag oldData = backup.getEntityData();
-                oldData.putDouble("Pos", target.getX());
+                net.minecraft.nbt.ListTag posList = new net.minecraft.nbt.ListTag();
+                posList.add(net.minecraft.nbt.DoubleTag.valueOf(target.getX()));
+                posList.add(net.minecraft.nbt.DoubleTag.valueOf(target.getY()));
+                posList.add(net.minecraft.nbt.DoubleTag.valueOf(target.getZ()));
+                oldData.put("Pos", posList);
 
                 target.load(oldData);
+                // load直後は位置情報が不安定な場合があるため再セット
                 target.setPos(target.getX(), target.getY(), target.getZ());
 
                 level.playSound(null, target.getX(), target.getY(), target.getZ(),
