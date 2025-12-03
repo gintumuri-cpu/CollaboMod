@@ -196,9 +196,17 @@ public class ItemSilverHorn extends Item {
                 // load直後は位置情報が不安定な場合があるため再セット
                 target.setPos(target.getX(), target.getY(), target.getZ());
 
+                // ■ 修正: 再成直後の攻撃判定を防ぐため、1秒間（20tick）の無敵時間を付与
+                target.invulnerableTime = 20;
+
+                // ■ 修正: イデアから履歴を確実に消去し、連続使用を不可にする
+                idea.clearHistory(target.getUUID());
+
                 level.playSound(null, target.getX(), target.getY(), target.getZ(),
                         SoundEvents.ZOMBIE_VILLAGER_CONVERTED, SoundSource.PLAYERS, 1.0F, 1.5F);
                 player.sendMessage(new TextComponent("§b再成完了"), Util.NIL_UUID);
+
+                idea.clearHistory(target.getUUID());
 
                 int painLoad = (int)(damageDiff * 2);
                 if (painLoad < 10) painLoad = 10;

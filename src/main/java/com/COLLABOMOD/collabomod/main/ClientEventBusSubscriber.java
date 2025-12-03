@@ -19,6 +19,7 @@ public class ClientEventBusSubscriber {
             // "NoopRenderer"（何もしないレンダラー＝透明）を割り当てます
             EntityRenderers.register(EntityRegister.GRAM_DEMOLITION.get(), NoopRenderer::new);
             EntityRenderers.register(EntityRegister.MIST_DISPERSION.get(), NoopRenderer::new);
+            EntityRenderers.register(EntityRegister.MATERIAL_BURST.get(), NoopRenderer::new);
         }
     }
 

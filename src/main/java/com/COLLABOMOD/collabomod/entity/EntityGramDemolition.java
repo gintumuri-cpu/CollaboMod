@@ -11,6 +11,7 @@ import net.minecraft.world.entity.projectile.ThrowableProjectile;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkHooks;
 
 public class EntityGramDemolition extends ThrowableProjectile {
@@ -56,14 +57,18 @@ public class EntityGramDemolition extends ThrowableProjectile {
         super.onHitEntity(result);
         Entity target = result.getEntity();
 
-        // 変更: 計算されたダメージを適用
-        float baseDamage = 10.0F;
-        float finalDamage = baseDamage * this.damageMultiplier;
+        float physicalDamage = 1.0F; // 0.5ハート
+        target.hurt(DamageSource.MAGIC, physicalDamage);
 
-        target.hurt(DamageSource.MAGIC, finalDamage);
+        // 2. 魔法的要素（バフ・デバフ）をすべて吹き飛ばす
+        if (target instanceof LivingEntity living) {
+            living.removeAllEffects(); // ポーション効果全消去
+        }
 
-        // 強烈な衝撃（ノックバック）を与える
-        target.setDeltaMovement(target.getDeltaMovement().add(this.getDeltaMovement().normalize().scale(1.5)));
+        // 3. 強烈なノックバック（物理的な衝撃）
+        // ベクトルを正規化して、強く押し出す
+        Vec3 knockback = this.getDeltaMovement().normalize().scale(2.5); // 強め
+        target.setDeltaMovement(target.getDeltaMovement().add(knockback));
     }
 
     // 重力をゼロにする（真っ直ぐ飛ぶ）

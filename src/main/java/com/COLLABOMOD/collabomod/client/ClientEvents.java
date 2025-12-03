@@ -30,6 +30,7 @@ import net.minecraftforge.client.event.*;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
 import org.lwjgl.glfw.GLFW; // マウス入力検知用
 
 import java.lang.reflect.Method;
@@ -106,10 +107,14 @@ public class ClientEvents {
         dummyCamera.setInvisible(true);
 
         try {
-            Method method = net.minecraft.client.multiplayer.ClientLevel.class.getDeclaredMethod("addEntity", int.class, Entity.class);
+            // ClientLevelクラスの "addEntity" (SRG名: m_104822_ ) を探す
+            // 第2引数は開発環境用の名前、本番ではForgeが自動的にSRG名にマッピングしてくれます
+            Method method = ObfuscationReflectionHelper.findMethod(net.minecraft.client.multiplayer.ClientLevel.class, "addEntity", int.class, Entity.class);
             method.setAccessible(true);
             method.invoke(mc.level, dummyCamera.getId(), dummyCamera);
-        } catch (Exception e) { e.printStackTrace(); }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
         mc.setCameraEntity(dummyCamera);
         mc.player.playSound(SoundEvents.BEACON_ACTIVATE, 0.5F, 1.5F);
@@ -147,21 +152,21 @@ public class ClientEvents {
             // 左クリックが押されたら (GLFW_MOUSE_BUTTON_LEFT = 0)
             if (event.getButton() == GLFW.GLFW_MOUSE_BUTTON_LEFT && event.getAction() == GLFW.GLFW_PRESS) {
 
-                // 幽体カメラの視線の先のブロックを取得（最大距離300）
+                // 幽体カメラの視線の先のブロックを取得
                 HitResult result = dummyCamera.pick(300.0D, 0.0F, false);
 
                 if (result.getType() != HitResult.Type.MISS) {
-                    // 座標を取得
                     BlockPos targetPos = new BlockPos(result.getLocation());
 
-                    // サーバーへパケット送信（発動要請）
+                    // サーバーへパケット送信
                     NetworkHandler.INSTANCE.sendToServer(new PacketMaterialBurst(targetPos));
 
                     // エレメンタル・サイト終了
                     disableElementalSight(mc);
 
-                    // クリックイベントを消費して、誤動作を防ぐ
-                    event.setCanceled(true);
+                    // ★★★ 重要修正: event.setCanceled(true) は削除しました！ ★★★
+                    // 代わりに、攻撃キーの入力を強制的にOFFにして、誤ってパンチするのを防ぎます
+                    mc.options.keyAttack.setDown(false);
                 }
             }
         }

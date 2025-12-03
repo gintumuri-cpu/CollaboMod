@@ -3,6 +3,7 @@ package com.COLLABOMOD.collabomod.register;
 import com.COLLABOMOD.collabomod.entity.EntityGramDemolition;
 import com.COLLABOMOD.collabomod.entity.EntityMistDispersion;
 import com.COLLABOMOD.collabomod.main.CollaboMod;
+import com.COLLABOMOD.collabomod.entity.EntityMaterialBurst;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -26,6 +27,17 @@ public class EntityRegister {
                     .clientTrackingRange(4)
                     .updateInterval(20)
                     .build("mist_dispersion"));
+
+    public static final RegistryObject<EntityType<EntityMaterialBurst>> MATERIAL_BURST = ENTITIES.register("material_burst",
+            () -> EntityType.Builder.<EntityMaterialBurst>of(
+                            // ★修正: ::new でエラーが出る場合は、明示的にラムダ式で書く
+                            (type, level) -> new EntityMaterialBurst(type, level),
+                            MobCategory.MISC
+                    )
+                    .sized(1.0F, 1.0F)
+                    .clientTrackingRange(10)
+                    .updateInterval(1)
+                    .build("material_burst"));
 
     public static void register(IEventBus eventBus) {
 

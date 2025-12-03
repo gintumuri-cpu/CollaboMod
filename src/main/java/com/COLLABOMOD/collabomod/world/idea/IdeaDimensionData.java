@@ -79,4 +79,11 @@ public class IdeaDimensionData extends SavedData {
         }
         return null;
     }
+    // 履歴を削除するメソッド
+    public void clearHistory(UUID uuid) {
+        if (entityHistory.containsKey(uuid)) {
+            entityHistory.remove(uuid);
+            this.setDirty();
+        }
+    }
 }
