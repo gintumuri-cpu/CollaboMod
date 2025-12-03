@@ -35,13 +35,6 @@ public class EntityGramDemolition extends ThrowableProjectile {
     public void tick() {
         super.tick();
 
-        // サーバー・クライアント共通：飛んでいる最中にパーティクルを出す
-        if (this.level.isClientSide) {
-            // 想子（サイオン）の塊なので、青い炎と火花で表現
-            this.level.addParticle(ParticleTypes.SOUL_FIRE_FLAME, this.getX(), this.getY(), this.getZ(), 0, 0, 0);
-            this.level.addParticle(ParticleTypes.ELECTRIC_SPARK, this.getX(), this.getY(), this.getZ(), 0, 0, 0);
-        }
-
         // 3秒(60tick)で消滅（負荷対策）
         if (this.tickCount > 60) {
             this.discard();

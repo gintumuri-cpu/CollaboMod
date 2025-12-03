@@ -32,10 +32,7 @@ public class EntityMistDispersion extends ThrowableProjectile{
     @Override
     public void tick() {
         super.tick();
-        // 演出：水色の粒子が静かに、しかし速く飛ぶ
-        if (this.level.isClientSide) {
-            this.level.addParticle(ParticleTypes.END_ROD, this.getX(), this.getY(), this.getZ(), 0, 0, 0);
-        }
+
         if (this.tickCount > 40) this.discard(); // 射程は短めでもOK（必殺技なので）
     }
 
