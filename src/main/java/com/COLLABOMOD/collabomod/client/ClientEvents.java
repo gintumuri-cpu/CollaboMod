@@ -294,6 +294,45 @@ public class ClientEvents {
         RenderSystem.enableDepthTest();
     }
 
+    // エレメンタル・サイト起動中、画面中央の対象の情報を表示
+    @SubscribeEvent
+    public static void onRenderGameOverlay(RenderGameOverlayEvent.Post event) {
+        if (event.getType() == RenderGameOverlayEvent.ElementType.ALL && isElementalSightActive) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.hitResult instanceof net.minecraft.world.phys.EntityHitResult entityResult) {
+                Entity target = entityResult.getEntity();
+                if (target instanceof LivingEntity living) {
+                    drawEidosInfo(event.getMatrixStack(), mc, living);
+                }
+            }
+        }
+    }
+
+    private static void drawEidosInfo(PoseStack poseStack, Minecraft mc, LivingEntity target) {
+        int width = mc.getWindow().getGuiScaledWidth();
+        int height = mc.getWindow().getGuiScaledHeight();
+        int centerX = width / 2;
+        int centerY = height / 2;
+
+        // ターゲットの横に情報を出す
+        int x = centerX + 20;
+        int y = centerY - 20;
+
+        // エイドス情報テキスト
+        String name = "Target: " + target.getName().getString();
+        String hp = "HP: " + (int)target.getHealth() + " / " + (int)target.getMaxHealth();
+        String type = "Type: " + target.getType().getRegistryName().toString();
+
+        // 文字描画（シアン色でデジタル風に）
+        int color = 0x00FFFF;
+        mc.font.draw(poseStack, name, x, y, color);
+        mc.font.draw(poseStack, hp, x, y + 10, color);
+        mc.font.draw(poseStack, type, x, y + 20, color);
+
+        // 飾り線
+        GuiComponent.fill(poseStack, x - 2, y - 2, x - 1, y + 30, 0xFF00FFFF);
+    }
+
     private static void drawNoiseOverlay(PoseStack poseStack, Minecraft mc, int intensity) {
         int width = mc.getWindow().getGuiScaledWidth();
         int height = mc.getWindow().getGuiScaledHeight();
