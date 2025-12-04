@@ -32,8 +32,11 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
 import org.lwjgl.glfw.GLFW; // マウス入力検知用
+import com.COLLABOMOD.collabomod.entity.EntityMaterialBurst;
+import net.minecraftforge.client.event.EntityViewRenderEvent;
 
 import java.lang.reflect.Method;
+import java.util.Random;
 
 @Mod.EventBusSubscriber(modid = CollaboMod.MOD_ID, value = Dist.CLIENT)
 public class ClientEvents {
@@ -41,39 +44,34 @@ public class ClientEvents {
     private static final ResourceLocation GUI_ICONS = new ResourceLocation("minecraft", "textures/gui/icons.png");
 
     public static boolean isElementalSightActive = false;
-    // ■ 追加: サード・アイによる起動モードかどうか
     public static boolean isThirdEyeMode = false;
 
     private static int sightTimer = 0;
     private static final int MAX_DURATION = 400;
     private static ArmorStand dummyCamera = null;
 
+    // --- キー入力 ---
     @SubscribeEvent
     public static void onKeyInput(InputEvent.KeyInputEvent event) {
-        // 通常のキー起動（Vキー）
         if (KeyInit.ELEMENTAL_SIGHT_KEY.consumeClick()) {
             Minecraft mc = Minecraft.getInstance();
-            toggleElementalSight(mc, false); // 通常モードで切替
+            toggleElementalSight(mc, false);
         }
     }
 
-    // ■ 追加: サード・アイから呼び出すメソッド
     public static void toggleThirdEyeMode() {
         Minecraft mc = Minecraft.getInstance();
-        // 既に通常モードで起動中なら一旦切る
         if (isElementalSightActive && !isThirdEyeMode) {
             disableElementalSight(mc);
         }
-        // サード・アイモードで切替
         toggleElementalSight(mc, true);
     }
 
-    // 共通の切替ロジック
     private static void toggleElementalSight(Minecraft mc, boolean thirdEye) {
         if (mc.player == null || mc.level == null) return;
 
         if (!isElementalSightActive) {
-            isThirdEyeMode = thirdEye; // モード設定
+            isThirdEyeMode = thirdEye;
             startElementalSight(mc);
         } else {
             disableElementalSight(mc);
@@ -86,7 +84,6 @@ public class ClientEvents {
 
         dummyCamera = new ArmorStand(EntityType.ARMOR_STAND, mc.level);
 
-        // 視点位置の調整
         double eyeHeight = mc.player.getEyeY() - dummyCamera.getEyeHeight();
         Vec3 look = mc.player.getLookAngle();
         double startX = mc.player.getX() + look.x * 0.5;
@@ -94,8 +91,6 @@ public class ClientEvents {
         double startZ = mc.player.getZ() + look.z * 0.5;
 
         dummyCamera.setPos(startX, startY, startZ);
-
-        // 回転同期
         dummyCamera.setYRot(mc.player.getYRot());
         dummyCamera.setYHeadRot(mc.player.getYRot());
         dummyCamera.setXRot(mc.player.getXRot());
@@ -107,19 +102,14 @@ public class ClientEvents {
         dummyCamera.setInvisible(true);
 
         try {
-            // ClientLevelクラスの "addEntity" (SRG名: m_104822_ ) を探す
-            // 第2引数は開発環境用の名前、本番ではForgeが自動的にSRG名にマッピングしてくれます
-            Method method = ObfuscationReflectionHelper.findMethod(net.minecraft.client.multiplayer.ClientLevel.class, "addEntity", int.class, Entity.class);
+            Method method = net.minecraft.client.multiplayer.ClientLevel.class.getDeclaredMethod("addEntity", int.class, Entity.class);
             method.setAccessible(true);
             method.invoke(mc.level, dummyCamera.getId(), dummyCamera);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        } catch (Exception e) { e.printStackTrace(); }
 
         mc.setCameraEntity(dummyCamera);
         mc.player.playSound(SoundEvents.BEACON_ACTIVATE, 0.5F, 1.5F);
 
-        // モードに応じたメッセージ
         String msg = isThirdEyeMode
                 ? "§c[サード・アイ] 照準シークエンス起動 - 発動点を視認して[攻撃]キー"
                 : "§b[情報体次元] 視覚連結開始 - 自由視点モード";
@@ -128,7 +118,7 @@ public class ClientEvents {
 
     private static void disableElementalSight(Minecraft mc) {
         isElementalSightActive = false;
-        isThirdEyeMode = false; // モードリセット
+        isThirdEyeMode = false;
         sightTimer = 0;
 
         if (mc.player != null) {
@@ -143,36 +133,24 @@ public class ClientEvents {
         }
     }
 
-    // ■ 追加: マウス入力（左クリック）検知
-    // サード・アイモード中、左クリックで発動座標を決定する
+    // --- マウス入力（左クリック） ---
     @SubscribeEvent
     public static void onMouseInput(InputEvent.MouseInputEvent event) {
         Minecraft mc = Minecraft.getInstance();
         if (isElementalSightActive && isThirdEyeMode && dummyCamera != null) {
-            // 左クリックが押されたら (GLFW_MOUSE_BUTTON_LEFT = 0)
             if (event.getButton() == GLFW.GLFW_MOUSE_BUTTON_LEFT && event.getAction() == GLFW.GLFW_PRESS) {
 
-                // 幽体カメラの視線の先のブロックを取得
                 HitResult result = dummyCamera.pick(300.0D, 0.0F, false);
 
                 if (result.getType() != HitResult.Type.MISS) {
                     BlockPos targetPos = new BlockPos(result.getLocation());
-
-                    // サーバーへパケット送信
                     NetworkHandler.INSTANCE.sendToServer(new PacketMaterialBurst(targetPos));
-
-                    // エレメンタル・サイト終了
                     disableElementalSight(mc);
-
-                    // ★★★ 重要修正: event.setCanceled(true) は削除しました！ ★★★
-                    // 代わりに、攻撃キーの入力を強制的にOFFにして、誤ってパンチするのを防ぎます
                     mc.options.keyAttack.setDown(false);
                 }
             }
         }
     }
-
-    // --- 以下、既存のイベント処理（変更なし） ---
 
     @SubscribeEvent
     public static void onRenderHand(RenderHandEvent event) {
@@ -181,6 +159,50 @@ public class ClientEvents {
         }
     }
 
+    // ■■■ 修正: 距離に応じた画面揺れ（Camera Shake） ■■■
+    /*
+    @SubscribeEvent
+    public static void onCameraSetup(EntityViewRenderEvent.CameraSetup event) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null || mc.player == null) return;
+
+        EntityMaterialBurst burst = null;
+        for (Entity e : mc.level.entitiesForRendering()) {
+            if (e instanceof EntityMaterialBurst b) {
+                burst = b;
+                break;
+            }
+        }
+
+        if (burst != null) {
+            float energy = burst.getEnergy();
+            double dist = burst.distanceTo(mc.player);
+
+            // 揺れの影響範囲: 500ブロック
+            double maxShakeDist = 500.0D;
+
+            if (energy > 10.0F && dist < maxShakeDist) {
+                // 距離減衰: 近いほど激しく、遠いほど緩やかに
+                double distFactor = 1.0D - (dist / maxShakeDist);
+                // 2乗することで「近くで急激に強くなる」演出にする
+                distFactor = distFactor * distFactor;
+
+                float intensity = (float) (energy * 0.05F * distFactor);
+
+                Random rand = new Random();
+                float shakeX = (rand.nextFloat() - 0.5F) * intensity;
+                float shakeY = (rand.nextFloat() - 0.5F) * intensity;
+
+                event.setYaw(event.getYaw() + shakeX);
+                event.setPitch(event.getPitch() + shakeY);
+            }
+        }
+    }
+
+     */
+
+
+    // --- Tick処理 ---
     @SubscribeEvent
     public static void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase == TickEvent.Phase.END) {
@@ -193,7 +215,6 @@ public class ClientEvents {
             if (isElementalSightActive && dummyCamera != null) {
                 sightTimer--;
 
-                // 回転同期
                 dummyCamera.setYRot(player.getYRot());
                 dummyCamera.yRotO = player.yRotO;
                 dummyCamera.setYHeadRot(player.getYHeadRot());
@@ -201,16 +222,13 @@ public class ClientEvents {
                 dummyCamera.setXRot(player.getXRot());
                 dummyCamera.xRotO = player.xRotO;
 
-                // カメラ移動 (WASD)
                 handleCameraMovement(mc);
 
-                // ノイズ・終了処理
                 if (sightTimer < 60 && sightTimer % 10 == 0) {
                     player.playSound(SoundEvents.ITEM_FRAME_ROTATE_ITEM, 0.5F, 0.5F + (60 - sightTimer) / 20.0F);
                 }
                 if (sightTimer <= 0) {
                     player.playSound(SoundEvents.GLASS_BREAK, 1.0F, 0.5F);
-                    // タイムアウト時は通常解除メッセージ
                     disableElementalSight(mc);
                 }
             }
@@ -219,9 +237,8 @@ public class ClientEvents {
 
     private static void handleCameraMovement(Minecraft mc) {
         if (dummyCamera == null) return;
-
-        float speed = 0.5F;
-        if (mc.options.keySprint.isDown()) speed = 1.0F;
+        float speed = 1.5F;
+        if (mc.options.keySprint.isDown()) speed = 4.0F;
 
         Vec3 lookVec = dummyCamera.getLookAngle();
         Vec3 rightVec = lookVec.cross(new Vec3(0, 1, 0)).normalize();
@@ -279,20 +296,53 @@ public class ClientEvents {
 
             if (isElementalSightActive) {
                 drawInformationWorldOverlay(event.getMatrixStack(), mc);
-                // サード・アイモードならノイズは出さない（集中している演出）
+                /*
                 if (!isThirdEyeMode && sightTimer < 60) {
                     drawNoiseOverlay(event.getMatrixStack(), mc, (60 - sightTimer));
                 }
+                 */
             } else {
                 drawStressOverlay(event.getMatrixStack(), mc, player);
             }
 
+            // ■■■ 修正: 距離に応じた砂嵐ノイズ ■■■
+            /*
+            for (Entity e : mc.level.entitiesForRendering()) {
+                if (e instanceof EntityMaterialBurst burst) {
+                    float energy = burst.getEnergy();
+                    // ノイズの影響範囲: 300ブロック
+                    double maxNoiseDist = 300.0D;
+                    double dist = burst.distanceTo(mc.player);
+
+                    if (energy > 50.0F && dist < maxNoiseDist) {
+                        // 距離減衰 (Linear)
+                        double distFactor = 1.0D - (dist / maxNoiseDist);
+                        // 0未満にならないように制限
+                        if (distFactor < 0) distFactor = 0;
+
+                        // エネルギーと距離を掛け合わせて不透明度を決定
+                        int noiseAlpha = (int) (Math.min(200, energy * 0.5F) * distFactor);
+
+                        if (noiseAlpha > 5) { // 薄すぎる場合は描画しない
+                            drawStaticNoise(event.getMatrixStack(), mc, noiseAlpha);
+                        }
+                        break;
+                    }
+                }
+            }
+             */
+
             ItemStack mainHand = player.getMainHandItem();
             ItemStack offHand = player.getOffhandItem();
-            boolean isHoldingCAD = (mainHand.getItem() instanceof ItemCAD || mainHand.getItem() instanceof ItemSilverHorn);
-            // サード・アイを持っている時もHUDを表示
-            if (isHoldingCAD || mainHand.getItem() instanceof ItemThirdEye || offHand.getItem() instanceof ItemThirdEye) {
-                drawPsionOverlay(event.getMatrixStack(), mc, player);
+            boolean isHoldingCAD = (mainHand.getItem() instanceof ItemCAD || mainHand.getItem() instanceof ItemSilverHorn || mainHand.getItem() instanceof ItemThirdEye) ||
+                    (offHand.getItem() instanceof ItemCAD || offHand.getItem() instanceof ItemSilverHorn || offHand.getItem() instanceof ItemThirdEye);
+
+            if (isHoldingCAD) {
+                PoseStack poseStack = event.getMatrixStack();
+                poseStack.pushPose();
+                poseStack.translate(0, 0, 200); // Zを200手前にずらす（確実に最前面へ）
+                drawPsionOverlay(poseStack, mc, player);
+                poseStack.popPose();
             }
         }
     }
@@ -313,7 +363,6 @@ public class ClientEvents {
     private static void drawInformationWorldOverlay(PoseStack poseStack, Minecraft mc) {
         int width = mc.getWindow().getGuiScaledWidth();
         int height = mc.getWindow().getGuiScaledHeight();
-        // サード・アイモードなら少し赤みがかった色にする（警告色）
         int color = isThirdEyeMode ? 0x40FF0000 : 0x400088FF;
         RenderSystem.disableDepthTest();
         RenderSystem.depthMask(false);
@@ -326,6 +375,7 @@ public class ClientEvents {
     }
 
     private static void drawNoiseOverlay(PoseStack poseStack, Minecraft mc, int intensity) {
+        /*
         int width = mc.getWindow().getGuiScaledWidth();
         int height = mc.getWindow().getGuiScaledHeight();
         float alpha = (intensity / 60.0F) * 0.6F;
@@ -333,6 +383,7 @@ public class ClientEvents {
             int color = 0x50FF0000;
             GuiComponent.fill(poseStack, 0, 0, width, height, color);
         }
+         */
     }
 
     private static void drawStressOverlay(PoseStack poseStack, Minecraft mc, Player player) {
@@ -362,6 +413,7 @@ public class ClientEvents {
             int height = mc.getWindow().getGuiScaledHeight();
             int x = width - 120;
             int y = height - 40;
+            RenderSystem.disableDepthTest();
             RenderSystem.setShader(GameRenderer::getPositionTexShader);
             RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
             RenderSystem.setShaderTexture(0, GUI_ICONS);
@@ -373,5 +425,23 @@ public class ClientEvents {
             GuiComponent.fill(poseStack, x, y, x + barWidth, y + 5, 0xFF555555);
             GuiComponent.fill(poseStack, x, y, x + filledWidth, y + 5, 0xFF00FFFF);
         });
+    }
+
+    private static void drawStaticNoise(PoseStack poseStack, Minecraft mc, int alpha) {
+        /*
+        int width = mc.getWindow().getGuiScaledWidth();
+        int height = mc.getWindow().getGuiScaledHeight();
+        Random rand = new Random();
+        int color = (alpha << 24) | 0x808080;
+        GuiComponent.fill(poseStack, 0, 0, width, height, color);
+        for (int i = 0; i < 20; i++) {
+            int x = rand.nextInt(width);
+            int y = rand.nextInt(height);
+            int w = rand.nextInt(50) + 10;
+            int h = rand.nextInt(5) + 1;
+            int noiseColor = (rand.nextInt(100) + 100) << 24 | 0xFFFFFF;
+            GuiComponent.fill(poseStack, x, y, x + w, y + h, noiseColor);
+        }
+         */
     }
 }

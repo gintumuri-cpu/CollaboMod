@@ -24,6 +24,7 @@ import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkHooks;
 
 import java.util.List;
@@ -31,11 +32,15 @@ import java.util.Random;
 
 public class EntityMaterialBurst extends Entity {
 
+    // データ同期用のキー定義
     private static final EntityDataAccessor<Float> CURRENT_RADIUS = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> CURRENT_ENERGY = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> CURRENT_ALPHA = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
 
-    // ■ 修正: 半径60.0F (直径120ブロック)
-    private float maxRadius = 65.0F;
-    private float expansionSpeed = 0.25F;
+    private float maxRadius = 80.0F;
+    private float expansionSpeed = 0.1F;
+
+    private static final Vector3f SPHERE_COLOR = new Vector3f(0.2F, 0.9F, 1.0F);
 
     public EntityMaterialBurst(EntityType<EntityMaterialBurst> type, Level level) {
         super(type, level);
@@ -49,70 +54,176 @@ public class EntityMaterialBurst extends Entity {
 
     @Override
     protected void defineSynchedData() {
+        // ■ 重要: ここで全てのキーを初期化しないとクラッシュします
         this.entityData.define(CURRENT_RADIUS, 0.0F);
+        this.entityData.define(CURRENT_ENERGY, 0.0F);
+        this.entityData.define(CURRENT_ALPHA, 1.0F);
     }
 
-    public float getRadius() {
-        return this.entityData.get(CURRENT_RADIUS);
-    }
+    // Getter / Setter
+    public float getRadius() { return this.entityData.get(CURRENT_RADIUS); }
+    public void setRadius(float radius) { this.entityData.set(CURRENT_RADIUS, radius); }
 
-    public void setRadius(float radius) {
-        this.entityData.set(CURRENT_RADIUS, radius);
-    }
+    public float getEnergy() { return this.entityData.get(CURRENT_ENERGY); }
+    public void setEnergy(float energy) { this.entityData.set(CURRENT_ENERGY, energy); }
+
+    public float getAlpha() { return this.entityData.get(CURRENT_ALPHA); }
+    public void setAlpha(float alpha) { this.entityData.set(CURRENT_ALPHA, alpha); }
 
     @Override
     public void tick() {
         super.tick();
 
-        float prevRadius = getRadius();
-        float currentRadius = prevRadius + expansionSpeed;
-        setRadius(currentRadius);
+        float currentRadius = getRadius();
+        float prevRadius = currentRadius;
+        float currentAlpha = getAlpha();
 
-        // クライアント側: 音の演出のみ（描画はRendererに任せる）
+        // 拡大フェーズ
+        if (currentRadius < maxRadius) {
+            currentRadius += expansionSpeed;
+            setRadius(currentRadius);
+        }
+        // フェードアウトフェーズ
+        else {
+            currentAlpha -= 0.025F;
+            if (currentAlpha < 0.0F) currentAlpha = 0.0F;
+            setAlpha(currentAlpha);
+        }
+
+        // --- クライアント側 ---
         if (this.level.isClientSide) {
-            if (this.tickCount % 10 == 0) {
+            float energy = getEnergy();
+            // 音の演出（フェードアウト中も継続）
+            if (currentAlpha > 0.0F && this.tickCount % 10 == 0) {
                 float pitch = 1.0F - Math.min(0.5F, (currentRadius / maxRadius) * 0.5F);
+                float volume = (50.0F + (energy * 0.1F)) * currentAlpha;
                 this.level.playLocalSound(this.getX(), this.getY(), this.getZ(),
-                        SoundEvents.BEACON_AMBIENT, SoundSource.WEATHER, 50.0F, pitch, false);
+                        SoundEvents.BEACON_AMBIENT, SoundSource.WEATHER, volume, pitch, false);
             }
-            // ■■■ 追加: 終了間際の残滓演出 ■■■
-            // 最大半径に近づいたら、フェードアウト用のパーティクルを出す
-            if (currentRadius >= maxRadius - 1.0F) {
+
+            // 残滓演出（最大サイズ到達時）
+            if (currentRadius >= maxRadius - expansionSpeed && currentAlpha > 0.9F) {
                 spawnRemnantParticles(maxRadius);
             }
         }
-        // サーバー側: 破壊処理
+
+        // --- サーバー側 ---
         else {
-            if (currentRadius > maxRadius) {
+            float currentEnergy = getEnergy();
+            if (currentEnergy > 0) setEnergy(currentEnergy * 0.8F);
+
+            // 完全に透明になったら消滅
+            if (currentAlpha <= 0.0F) {
+                level.playSound(null, this.getX(), this.getY(), this.getZ(),
+                        SoundEvents.GENERIC_EXPLODE, SoundSource.WEATHER, 100.0F, 0.5F);
                 this.discard();
                 return;
             }
-            processDestruction(prevRadius, currentRadius);
-            processEntityDamage(currentRadius);
+
+            // 拡大中のみ破壊処理
+            if (currentRadius < maxRadius) {
+                processDestruction(prevRadius, currentRadius);
+                processCoreCleanup(5);
+                processShockwave(currentRadius);
+                processEntityDamage(currentRadius);
+            }
+        }
+    }
+
+    private void processCoreCleanup(int range) {
+        BlockPos center = this.blockPosition();
+        for (int x = -range; x <= range; x++) {
+            for (int y = -range; y <= range; y++) {
+                for (int z = -range; z <= range; z++) {
+                    BlockPos pos = center.offset(x, y, z);
+                    // まだ空気じゃない（＝水が流れてきた）なら即消す
+                    if (!level.isEmptyBlock(pos)) {
+                        level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2);
+                    }
+                }
+            }
+        }
+    }
+
+    // 残滓パーティクル
+    private void spawnRemnantParticles(float radius) {
+        int count = 500;
+        Random rand = new Random();
+
+        for (int i = 0; i < count; i++) {
+            double r = radius * Math.sqrt(rand.nextDouble());
+            double theta = rand.nextDouble() * 2 * Math.PI;
+            double phi = Math.acos(2 * rand.nextDouble() - 1);
+
+            double x = r * Math.sin(phi) * Math.cos(theta);
+            double y = r * Math.sin(phi) * Math.sin(theta);
+            double z = r * Math.cos(phi);
+
+            this.level.addParticle(ParticleTypes.CAMPFIRE_SIGNAL_SMOKE,
+                    this.getX() + x, this.getY() + y, this.getZ() + z,
+                    0, 0.05, 0);
+
+            if (r > radius * 0.8) {
+                this.level.addParticle(ParticleTypes.EXPLOSION,
+                        this.getX() + x, this.getY() + y, this.getZ() + z,
+                        0, 0, 0);
+            }
         }
     }
 
     private void processDestruction(float minR, float maxR) {
         BlockPos center = this.blockPosition();
         int range = (int) Math.ceil(maxR);
+        float massEnergy = 0.0F;
 
         for (int x = -range; x <= range; x++) {
             for (int y = -range; y <= range; y++) {
                 for (int z = -range; z <= range; z++) {
                     double distSq = x * x + y * y + z * z;
 
-                    // ■ 修正: minRが0の場合（初回）は、中心点（距離0）も含めるように条件分岐
-                    boolean isInsideInner = (minR == 0) ? false : (distSq <= minR * minR);
-
-                    if (distSq <= maxR * maxR && !isInsideInner) {
+                    if (distSq <= maxR * maxR && (minR == 0 || distSq > minR * minR)) {
                         BlockPos targetPos = center.offset(x, y, z);
                         BlockState state = level.getBlockState(targetPos);
                         FluidState fluid = level.getFluidState(targetPos);
 
                         if (!state.isAir() || !fluid.isEmpty()) {
                             if (state.getDestroySpeed(level, targetPos) < 0) continue;
+
+                            float hardness = state.getExplosionResistance(level, targetPos, null);
+                            if (hardness < 1.0F) hardness = 1.0F;
+                            massEnergy += hardness;
+
                             level.setBlock(targetPos, Blocks.AIR.defaultBlockState(), 2);
                         }
+                    }
+                }
+            }
+        }
+
+        if (massEnergy > 0) {
+            float totalEnergy = getEnergy() + massEnergy;
+            if (totalEnergy > 1000.0F) totalEnergy = 1000.0F;
+            setEnergy(totalEnergy);
+        }
+    }
+
+    private void processShockwave(float radius) {
+        float energy = getEnergy();
+        if (energy < 10.0F) return;
+
+        double shockRange = radius * 2.0D;
+        AABB area = this.getBoundingBox().inflate(shockRange);
+        List<Entity> list = this.level.getEntities(this, area);
+
+        for (Entity e : list) {
+            if (e instanceof LivingEntity && e != this) {
+                double dist = e.distanceTo(this);
+                if (dist > radius) {
+                    double force = (energy / 50.0D) * (1.0D - (dist / shockRange));
+                    if (force > 0) {
+                        Vec3 dir = e.position().subtract(this.position()).normalize();
+                        e.setDeltaMovement(e.getDeltaMovement().add(dir.scale(force)));
+                        e.hurtMarked = true;
                     }
                 }
             }
@@ -122,42 +233,10 @@ public class EntityMaterialBurst extends Entity {
     private void processEntityDamage(float radius) {
         AABB area = this.getBoundingBox().inflate(radius);
         List<Entity> list = this.level.getEntities(this, area);
-
         for (Entity e : list) {
             if (e.distanceToSqr(this) <= radius * radius) {
-                if (e instanceof LivingEntity) {
-                    e.hurt(DamageSource.OUT_OF_WORLD, Float.MAX_VALUE);
-                } else {
-                    e.discard();
-                }
-            }
-        }
-    }
-
-    private void spawnRemnantParticles(float radius) {
-        int count = 200; // クライアント負荷を考慮して程々に
-        Random rand = new Random();
-
-        for (int i = 0; i < count; i++) {
-            // 球の内部～表面にランダム配置
-            double r = radius * Math.sqrt(rand.nextDouble()); // 体積一様分布
-            double theta = rand.nextDouble() * 2 * Math.PI;
-            double phi = Math.acos(2 * rand.nextDouble() - 1);
-
-            double x = r * Math.sin(phi) * Math.cos(theta);
-            double y = r * Math.sin(phi) * Math.sin(theta);
-            double z = r * Math.cos(phi);
-
-            // 1. CAMPFIRE_SIGNAL_SMOKE: 長く残る白い煙（蒸発した物質）
-            this.level.addParticle(ParticleTypes.CAMPFIRE_SIGNAL_SMOKE,
-                    this.getX() + x, this.getY() + y, this.getZ() + z,
-                    0, 0.1, 0); // 少し上昇する
-
-            // 2. EXPLOSION: 爆発の余韻
-            if (i % 5 == 0) {
-                this.level.addParticle(ParticleTypes.EXPLOSION,
-                        this.getX() + x, this.getY() + y, this.getZ() + z,
-                        0, 0, 0);
+                if (e instanceof LivingEntity) e.hurt(DamageSource.OUT_OF_WORLD, Float.MAX_VALUE);
+                else e.discard();
             }
         }
     }
@@ -165,11 +244,15 @@ public class EntityMaterialBurst extends Entity {
     @Override
     protected void readAdditionalSaveData(CompoundTag tag) {
         this.setRadius(tag.getFloat("Radius"));
+        this.setEnergy(tag.getFloat("Energy"));
+        this.setAlpha(tag.getFloat("Alpha"));
     }
 
     @Override
     protected void addAdditionalSaveData(CompoundTag tag) {
         tag.putFloat("Radius", getRadius());
+        tag.putFloat("Energy", getEnergy());
+        tag.putFloat("Alpha", getAlpha());
     }
 
     @Override
