@@ -113,32 +113,124 @@ public class EntityMaterialBurst extends Entity {
             if (currentEnergy > 0) setEnergy(currentEnergy * 0.8F);
 
             // 完全に透明になったら消滅
+//            if (currentAlpha <= 0.0F) {
+//                level.playSound(null, this.getX(), this.getY(), this.getZ(),
+//                        SoundEvents.GENERIC_EXPLODE, SoundSource.WEATHER, 100.0F, 0.5F);
+//                this.discard();
+//                return;
+//            }
+
             if (currentAlpha <= 0.0F) {
-                level.playSound(null, this.getX(), this.getY(), this.getZ(),
-                        SoundEvents.GENERIC_EXPLODE, SoundSource.WEATHER, 100.0F, 0.5F);
+                // 音は消去済み
                 this.discard();
                 return;
             }
 
-            // 拡大中のみ破壊処理
             if (currentRadius < maxRadius) {
-                processDestruction(prevRadius, currentRadius);
-                processCoreCleanup(5);
+                // ■ 修正: スキャン漏れを防ぐため、破壊範囲に厚みを持たせる
+                // 現在の半径から「3.0ブロック手前」までを毎回スキャンする
+                // これにより、計算漏れや、流入してきた水を何度も消し飛ばすことができます
+                processDestruction(currentRadius - 3.0F, currentRadius);
+
+                // ■ 修正: 内部の水抜き処理（Core Cleanup）
+                // 3.0Fより内側の「既に破壊が終わったはずの場所」に水が戻ってきていないかチェック
+                // 毎Tick全範囲やると重いので、ランダムまたは分割してチェックするのが理想ですが、
+                // 今回は「内側5ブロック」と「ランダムな内部」を掃除します
+                processCoreCleanup(currentRadius);
+
                 processShockwave(currentRadius);
                 processEntityDamage(currentRadius);
             }
         }
     }
 
-    private void processCoreCleanup(int range) {
+    // ■ 修正: 破壊処理（厚みを持たせてスキャン）
+    private void processDestruction(float minR, float maxR) {
         BlockPos center = this.blockPosition();
+        // 負の値にならないように
+        if (minR < 0) minR = 0;
+
+        int range = (int) Math.ceil(maxR);
+        float massEnergy = 0.0F;
+
         for (int x = -range; x <= range; x++) {
             for (int y = -range; y <= range; y++) {
                 for (int z = -range; z <= range; z++) {
-                    BlockPos pos = center.offset(x, y, z);
-                    // まだ空気じゃない（＝水が流れてきた）なら即消す
-                    if (!level.isEmptyBlock(pos)) {
-                        level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2);
+                    double distSq = x * x + y * y + z * z;
+
+                    // シェルの範囲内
+                    if (distSq <= maxR * maxR && distSq > minR * minR) {
+                        BlockPos targetPos = center.offset(x, y, z);
+                        BlockState state = level.getBlockState(targetPos);
+                        FluidState fluid = level.getFluidState(targetPos);
+
+                        if (!state.isAir() || !fluid.isEmpty()) {
+                            if (state.getDestroySpeed(level, targetPos) < 0) continue;
+
+                            // 質量エネルギー計算
+                            float hardness = state.getExplosionResistance(level, targetPos, null);
+                            if (hardness < 1.0F) hardness = 1.0F;
+                            massEnergy += hardness;
+
+                            // 強制置換（水流更新なし）
+                            level.setBlock(targetPos, Blocks.AIR.defaultBlockState(), 2);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (massEnergy > 0) {
+            float totalEnergy = getEnergy() + massEnergy;
+            if (totalEnergy > 1000.0F) totalEnergy = 1000.0F;
+            setEnergy(totalEnergy);
+        }
+    }
+
+    // ■ 追加: 内部の液体の掃除
+    private void processCoreCleanup(float currentRadius) {
+        // 半径が小さい時は全域掃除
+        if (currentRadius < 5.0F) {
+            cleanFluidsInArea(0, currentRadius);
+            return;
+        }
+
+        // 半径が大きい時は、中心付近(5ブロック)と、ランダムな内部を掃除
+        cleanFluidsInArea(0, 5.0F); // 爆心地の確保
+
+        // 負荷軽減のため、内部全体ではなくランダムに数点をチェックして水を消す
+        // (大量の水が雪崩れ込んできた場合の対策)
+        Random rand = new Random();
+        BlockPos center = this.blockPosition();
+        for (int i = 0; i < 20; i++) { // 20箇所チェック
+            double r = rand.nextDouble() * (currentRadius - 3.0F); // シェルより内側
+            double theta = rand.nextDouble() * 2 * Math.PI;
+            double phi = Math.acos(2 * rand.nextDouble() - 1);
+            int x = (int)(r * Math.sin(phi) * Math.cos(theta));
+            int y = (int)(r * Math.sin(phi) * Math.sin(theta));
+            int z = (int)(r * Math.cos(phi));
+
+            BlockPos pos = center.offset(x, y, z);
+            if (!level.getFluidState(pos).isEmpty()) {
+                level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2);
+            }
+        }
+    }
+
+    // 範囲内の液体を消すヘルパー
+    private void cleanFluidsInArea(float minR, float maxR) {
+        BlockPos center = this.blockPosition();
+        int range = (int) Math.ceil(maxR);
+
+        for (int x = -range; x <= range; x++) {
+            for (int y = -range; y <= range; y++) {
+                for (int z = -range; z <= range; z++) {
+                    double distSq = x * x + y * y + z * z;
+                    if (distSq <= maxR * maxR && distSq >= minR * minR) {
+                        BlockPos pos = center.offset(x, y, z);
+                        if (!level.getFluidState(pos).isEmpty()) {
+                            level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2);
+                        }
                     }
                 }
             }
@@ -171,41 +263,41 @@ public class EntityMaterialBurst extends Entity {
         }
     }
 
-    private void processDestruction(float minR, float maxR) {
-        BlockPos center = this.blockPosition();
-        int range = (int) Math.ceil(maxR);
-        float massEnergy = 0.0F;
-
-        for (int x = -range; x <= range; x++) {
-            for (int y = -range; y <= range; y++) {
-                for (int z = -range; z <= range; z++) {
-                    double distSq = x * x + y * y + z * z;
-
-                    if (distSq <= maxR * maxR && (minR == 0 || distSq > minR * minR)) {
-                        BlockPos targetPos = center.offset(x, y, z);
-                        BlockState state = level.getBlockState(targetPos);
-                        FluidState fluid = level.getFluidState(targetPos);
-
-                        if (!state.isAir() || !fluid.isEmpty()) {
-                            if (state.getDestroySpeed(level, targetPos) < 0) continue;
-
-                            float hardness = state.getExplosionResistance(level, targetPos, null);
-                            if (hardness < 1.0F) hardness = 1.0F;
-                            massEnergy += hardness;
-
-                            level.setBlock(targetPos, Blocks.AIR.defaultBlockState(), 2);
-                        }
-                    }
-                }
-            }
-        }
-
-        if (massEnergy > 0) {
-            float totalEnergy = getEnergy() + massEnergy;
-            if (totalEnergy > 1000.0F) totalEnergy = 1000.0F;
-            setEnergy(totalEnergy);
-        }
-    }
+//    private void processDestruction(float minR, float maxR) {
+//        BlockPos center = this.blockPosition();
+//        int range = (int) Math.ceil(maxR);
+//        float massEnergy = 0.0F;
+//
+//        for (int x = -range; x <= range; x++) {
+//            for (int y = -range; y <= range; y++) {
+//                for (int z = -range; z <= range; z++) {
+//                    double distSq = x * x + y * y + z * z;
+//
+//                    if (distSq <= maxR * maxR && (minR == 0 || distSq > minR * minR)) {
+//                        BlockPos targetPos = center.offset(x, y, z);
+//                        BlockState state = level.getBlockState(targetPos);
+//                        FluidState fluid = level.getFluidState(targetPos);
+//
+//                        if (!state.isAir() || !fluid.isEmpty()) {
+//                            if (state.getDestroySpeed(level, targetPos) < 0) continue;
+//
+//                            float hardness = state.getExplosionResistance(level, targetPos, null);
+//                            if (hardness < 1.0F) hardness = 1.0F;
+//                            massEnergy += hardness;
+//
+//                            level.setBlock(targetPos, Blocks.AIR.defaultBlockState(), 2);
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//
+//        if (massEnergy > 0) {
+//            float totalEnergy = getEnergy() + massEnergy;
+//            if (totalEnergy > 1000.0F) totalEnergy = 1000.0F;
+//            setEnergy(totalEnergy);
+//        }
+//    }
 
     private void processShockwave(float radius) {
         float energy = getEnergy();
