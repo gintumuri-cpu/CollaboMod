@@ -22,7 +22,7 @@ public class IdeaDimensionData extends SavedData {
     private final Map<BlockPos, EidosData> blockHistory = new HashMap<>();
 
     // 履歴の保持数上限（再成できる限界）
-    private static final int MAX_HISTORY = 10;
+    private static final int MAX_HISTORY = 20;
 
     // データの取得（なければ新規作成）
     public static IdeaDimensionData get(ServerLevel level) {
@@ -69,6 +69,7 @@ public class IdeaDimensionData extends SavedData {
     // ■■■ 事象の読み出し（再成用） ■■■
 
     // 指定したエンティティの「1つ前」のエイドスを取り出す
+    /*
     public EidosData getPreviousEntityState(UUID uuid) {
         if (entityHistory.containsKey(uuid)) {
             LinkedList<EidosData> history = entityHistory.get(uuid);
@@ -79,6 +80,34 @@ public class IdeaDimensionData extends SavedData {
         }
         return null;
     }
+
+     */
+    // ■ 追加: 最適な（最もHPが高い）エイドスを検索して取得
+    public EidosData getOptimalEntityState(UUID uuid) {
+        if (entityHistory.containsKey(uuid)) {
+            LinkedList<EidosData> history = entityHistory.get(uuid);
+            if (history.isEmpty()) return null;
+
+            // 履歴の中で最もHPが高いデータを探す
+            EidosData bestState = null;
+            float maxHealthFound = -1.0F;
+
+            for (EidosData data : history) {
+                CompoundTag tag = data.getEntityData();
+                if (tag.contains("Health")) {
+                    float hp = tag.getFloat("Health");
+                    if (hp > maxHealthFound) {
+                        maxHealthFound = hp;
+                        bestState = data;
+                    }
+                }
+            }
+            // 見つかればそれを、なければ最新（直前）を返す
+            return bestState != null ? bestState : history.getFirst();
+        }
+        return null;
+    }
+
     // 履歴を削除するメソッド
     public void clearHistory(UUID uuid) {
         if (entityHistory.containsKey(uuid)) {

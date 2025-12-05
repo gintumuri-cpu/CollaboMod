@@ -169,7 +169,7 @@ public class ItemSilverHorn extends Item {
     private void castRegrowth(ServerLevel level, Player player, LivingEntity target) {
         player.getCapability(MagicStatsProvider.PLAYER_MAGIC_STATS).ifPresent(rStats -> {
             IdeaDimensionData idea = IdeaDimensionData.get(level);
-            EidosData backup = idea.getPreviousEntityState(target.getUUID());
+            EidosData backup = idea.getOptimalEntityState(target.getUUID());
 
             if (backup == null) {
                 player.sendMessage(new TextComponent("§c修復可能なエイドスが存在しません"), Util.NIL_UUID);
@@ -181,9 +181,17 @@ public class ItemSilverHorn extends Item {
                 rStats.setCurrentPsion(rStats.getCurrentPsion() - cost);
 
                 float currentHP = target.getHealth();
+                // NBTから取得したHP（過去の最大の状態）
                 float oldHP = backup.getEntityData().contains("Health") ? backup.getEntityData().getFloat("Health") : target.getMaxHealth();
+
+                // ■ ここで比較: もし現在のHPが、バックアップのHPと同じかそれ以上なら「回復の必要なし」
+                if (currentHP >= oldHP) {
+                    player.sendMessage(new TextComponent("§e対象のエイドスは書き換え出来ません"), Util.NIL_UUID);
+                    // コストを返還してもいいですが、発動した時点で消費するのが通例
+                    return;
+                }
+
                 float damageDiff = oldHP - currentHP;
-                if (damageDiff < 0) damageDiff = 0;
 
                 CompoundTag oldData = backup.getEntityData();
                 net.minecraft.nbt.ListTag posList = new net.minecraft.nbt.ListTag();

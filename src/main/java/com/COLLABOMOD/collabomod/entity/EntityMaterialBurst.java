@@ -351,4 +351,11 @@ public class EntityMaterialBurst extends Entity {
     public Packet<?> getAddEntityPacket() {
         return NetworkHooks.getEntitySpawningPacket(this);
     }
+    // ■■■ 重要追加: 距離による描画制限を解除 ■■■
+    @Override
+    public boolean shouldRenderAtSqrDistance(double distance) {
+        // 通常は "distance < 64 * 64" などの判定が入りますが、
+        // true を返すことで、チャンクが読み込まれている限り、どんなに遠くても描画させます
+        return true;
+    }
 }

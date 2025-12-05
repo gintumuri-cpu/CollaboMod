@@ -34,6 +34,9 @@ import net.minecraftforge.client.event.EntityViewRenderEvent;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
+import net.minecraft.client.gui.Font;
+import com.mojang.math.Matrix4f;
 import org.lwjgl.glfw.GLFW;
 
 import java.lang.reflect.Method;
@@ -83,8 +86,11 @@ public class ClientEvents {
         isElementalSightActive = true;
         sightTimer = MAX_DURATION;
 
+        // ダミー生成（ワールドには追加しない＝addEntityしない）
+        // 単なるオブジェクトとして生成するだけです
         dummyCamera = new ArmorStand(EntityType.ARMOR_STAND, mc.level);
 
+        // 視点位置調整
         double eyeHeight = mc.player.getEyeY() - dummyCamera.getEyeHeight();
         Vec3 look = mc.player.getLookAngle();
         double startX = mc.player.getX() + look.x * 0.5;
@@ -92,6 +98,12 @@ public class ClientEvents {
         double startZ = mc.player.getZ() + look.z * 0.5;
 
         dummyCamera.setPos(startX, startY, startZ);
+
+        // ■ 重要: 補間用座標（Old）も初期化しないと、最初のフレームでカメラが吹っ飛びます
+        dummyCamera.xo = startX; dummyCamera.yo = startY; dummyCamera.zo = startZ;
+        dummyCamera.xOld = startX; dummyCamera.yOld = startY; dummyCamera.zOld = startZ;
+
+        // 回転同期
         dummyCamera.setYRot(mc.player.getYRot());
         dummyCamera.setYHeadRot(mc.player.getYRot());
         dummyCamera.setXRot(mc.player.getXRot());
@@ -101,12 +113,6 @@ public class ClientEvents {
 
         dummyCamera.setNoGravity(true);
         dummyCamera.setInvisible(true);
-
-        try {
-            Method method = net.minecraft.client.multiplayer.ClientLevel.class.getDeclaredMethod("addEntity", int.class, Entity.class);
-            method.setAccessible(true);
-            method.invoke(mc.level, dummyCamera.getId(), dummyCamera);
-        } catch (Exception e) { e.printStackTrace(); }
 
         mc.setCameraEntity(dummyCamera);
         mc.player.playSound(SoundEvents.BEACON_ACTIVATE, 0.5F, 1.5F);
@@ -128,10 +134,7 @@ public class ClientEvents {
             mc.player.displayClientMessage(new TextComponent("§7[情報体次元] 連結解除"), true);
         }
 
-        if (dummyCamera != null) {
-            dummyCamera.remove(Entity.RemovalReason.DISCARDED);
-            dummyCamera = null;
-        }
+        dummyCamera = null;
     }
 
     // --- マウス入力 ---
@@ -171,8 +174,8 @@ public class ClientEvents {
     @SubscribeEvent
     public static void onRenderFog(EntityViewRenderEvent.RenderFogEvent event) {
         if (isElementalSightActive) {
-            RenderSystem.setShaderFogStart(-6.0F);
-            RenderSystem.setShaderFogEnd(80.0F);
+            RenderSystem.setShaderFogStart(-3.0F);
+            RenderSystem.setShaderFogEnd(140.0F);
         }
     }
 
@@ -293,12 +296,21 @@ public class ClientEvents {
             if (isElementalSightActive && dummyCamera != null) {
                 sightTimer--;
 
+                // ■ 重要: 補間用座標の更新
+                // これをやらないと、エンティティが動いていないとみなされて視点がガクガクになります
+                dummyCamera.xo = dummyCamera.getX();
+                dummyCamera.yo = dummyCamera.getY();
+                dummyCamera.zo = dummyCamera.getZ();
+
+                // 回転同期
+                dummyCamera.yRotO = dummyCamera.getYRot();
+                dummyCamera.xRotO = dummyCamera.getXRot();
+                dummyCamera.yHeadRotO = dummyCamera.getYHeadRot();
+
+                // プレイヤーの操作を反映
                 dummyCamera.setYRot(player.getYRot());
-                dummyCamera.yRotO = player.yRotO;
                 dummyCamera.setYHeadRot(player.getYHeadRot());
-                dummyCamera.yHeadRotO = player.yHeadRotO;
                 dummyCamera.setXRot(player.getXRot());
-                dummyCamera.xRotO = player.xRotO;
 
                 handleCameraMovement(mc);
 
@@ -322,8 +334,8 @@ public class ClientEvents {
         double dx = 0; double dy = 0; double dz = 0;
         if (mc.options.keyUp.isDown()) { dx += lookVec.x * speed; dy += lookVec.y * speed; dz += lookVec.z * speed; }
         if (mc.options.keyDown.isDown()) { dx -= lookVec.x * speed; dy -= lookVec.y * speed; dz -= lookVec.z * speed; }
-        if (mc.options.keyLeft.isDown()) { dx += rightVec.x * speed; dz += rightVec.z * speed; }
-        if (mc.options.keyRight.isDown()) { dx -= rightVec.x * speed; dz -= rightVec.z * speed; }
+        if (mc.options.keyLeft.isDown()) { dx -= rightVec.x * speed; dz += rightVec.z * speed; }
+        if (mc.options.keyRight.isDown()) { dx += rightVec.x * speed; dz -= rightVec.z * speed; }
         if (mc.options.keyJump.isDown()) dy += speed;
         if (mc.options.keyShift.isDown()) dy -= speed;
         dummyCamera.setPos(dummyCamera.getX() + dx, dummyCamera.getY() + dy, dummyCamera.getZ() + dz);
@@ -336,6 +348,8 @@ public class ClientEvents {
             input.forwardImpulse = 0; input.leftImpulse = 0; input.jumping = false; input.shiftKeyDown = false;
         }
     }
+
+
     @SubscribeEvent
     public static void onRenderLivingPre(RenderLivingEvent.Pre<LivingEntity, ?> event) {
         if (isElementalSightActive && dummyCamera != null) {
@@ -344,10 +358,83 @@ public class ClientEvents {
             }
         }
     }
+
     @SubscribeEvent
     public static void onRenderLivingPost(RenderLivingEvent.Post<LivingEntity, ?> event) {
-        if (isElementalSightActive && !event.getEntity().hasEffect(MobEffects.GLOWING)) event.getEntity().setGlowingTag(false);
+        if (isElementalSightActive) {
+            LivingEntity entity = event.getEntity();
+
+            // 1. 発光処理（既存）
+            if (!entity.hasEffect(MobEffects.GLOWING)) {
+                entity.setGlowingTag(false);
+            }
+
+            // 2. ★追加: エイドス情報の描画
+            // プレイヤー自身とダミーカメラには表示しない
+            Minecraft mc = Minecraft.getInstance();
+            if (entity != mc.player && entity != dummyCamera) {
+                // 距離チェック (100m以内)
+                double distSq = dummyCamera != null ? dummyCamera.distanceToSqr(entity) : mc.player.distanceToSqr(entity);
+                if (distSq < 100 * 100) {
+                    renderEidosInfo(event.getPoseStack(), entity, mc);
+                }
+            }
+        }
     }
+
+    // ■ 新規追加: 頭上に情報を描画するメソッド
+    private static void renderEidosInfo(PoseStack poseStack, LivingEntity entity, Minecraft mc) {
+        poseStack.pushPose();
+
+        // 1. 位置調整: 頭の上に持ってくる
+        float height = entity.getBbHeight() + 0.8F;
+        poseStack.translate(0.0D, height, 0.0D);
+
+        // 2. 回転: 常にカメラの方を向くようにする
+        // EntityRenderDispatcher からカメラの回転情報を取得
+        poseStack.mulPose(mc.getEntityRenderDispatcher().cameraOrientation());
+
+        // 3. スケール: 文字を適切なサイズにする（マイナスにしないと鏡文字になる）
+        float scale = 0.025F;
+        poseStack.scale(-scale, -scale, scale);
+
+        // 4. 描画設定
+        RenderSystem.disableDepthTest(); // 壁を透視して見えるようにする
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+
+        Font font = mc.font;
+        Matrix4f matrix = poseStack.last().pose();
+
+        // --- 表示する情報 ---
+        // 名前
+        String nameStr = "Target: " + entity.getName().getString();
+        // 体力 (現在 / 最大)
+        int hp = (int)entity.getHealth();
+        int maxHp = (int)entity.getMaxHealth();
+        String hpStr = "Psion(HP): " + hp + " / " + maxHp;
+        // 距離
+        int dist = (int)Math.sqrt(mc.player.distanceToSqr(entity));
+        String distStr = "Dist: " + dist + "m";
+
+        // --- 描画実行 ---
+        // 背景色 (半透明の黒): 0x80000000
+        // 文字色 (シアン): 0x00FFFF (AARRGGBB形式だと 0xFF00FFFF)
+
+        float xOffset = -font.width(nameStr) / 2.0F; // 中央揃え
+
+        // 1行目: 名前
+        font.drawInBatch(nameStr, -font.width(nameStr) / 2.0F, 0, 0xFF00FFFF, false, matrix, mc.renderBuffers().bufferSource(), true, 0x80000000, 0xF000F0);
+        // 2行目: HP
+        font.drawInBatch(hpStr, -font.width(hpStr) / 2.0F, 10, 0xFF00FFFF, false, matrix, mc.renderBuffers().bufferSource(), true, 0x80000000, 0xF000F0);
+        // 3行目: 距離
+        font.drawInBatch(distStr, -font.width(distStr) / 2.0F, 20, 0xFF00FFFF, false, matrix, mc.renderBuffers().bufferSource(), true, 0x80000000, 0xF000F0);
+
+        RenderSystem.enableDepthTest(); // 設定を戻す
+        poseStack.popPose();
+    }
+
+
     @SubscribeEvent
     public static void onRenderGui(RenderGameOverlayEvent.Post event) {
         if (event.getType() == RenderGameOverlayEvent.ElementType.ALL) {
