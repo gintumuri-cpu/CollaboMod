@@ -54,7 +54,7 @@ public class ItemSilverHorn extends Item {
         ItemStack stack = player.getItemInHand(hand);
 
         // --- モード切替処理 (Shift + 右クリック) ---
-        if (player.isShiftKeyDown()) {
+        if (player.isCrouching()) {
             if (!level.isClientSide) {
                 cycleMode(stack, player);
             }

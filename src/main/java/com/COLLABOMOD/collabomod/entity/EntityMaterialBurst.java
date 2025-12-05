@@ -37,7 +37,7 @@ public class EntityMaterialBurst extends Entity {
     private static final EntityDataAccessor<Float> CURRENT_ENERGY = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> CURRENT_ALPHA = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
 
-    private float maxRadius = 80.0F;
+    private float maxRadius = 30.0F;
     private float expansionSpeed = 0.1F;
 
     private static final Vector3f SPHERE_COLOR = new Vector3f(0.2F, 0.9F, 1.0F);

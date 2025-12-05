@@ -1,6 +1,7 @@
 package com.COLLABOMOD.collabomod.network;
 
 import com.COLLABOMOD.collabomod.capability.MagicStatsProvider;
+import com.COLLABOMOD.collabomod.client.ClientPacketHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.player.Player;
@@ -38,30 +39,15 @@ public class PacketSyncMagicStats {
     }
 
     // ハンドル：データを受け取った後の処理（クライアント側で実行）
-    public boolean handle(Supplier<NetworkEvent.Context> supplier) {
-        NetworkEvent.Context context = supplier.get();
-        context.enqueueWork(() -> {
-            // ここはクライアントサイドのスレッドで実行される
-            // クライアントのプレイヤーを取得
-            Player player = Minecraft.getInstance().player;
-            if (player != null) {
-                player.getCapability(MagicStatsProvider.PLAYER_MAGIC_STATS).ifPresent(stats -> {
-                    stats.setCurrentPsion(this.currentPsion);
-                    stats.setMaxPsion(this.maxPsion);
-                    // 演算規模は本来固定だが、表示用に同期する
-                    // ※Setterがない場合はMagicStatsに追加するか、直接フィールドを操作する必要があるが、
-                    // 前回のコードにはSetterがないため、MagicStats.javaに以下のSetterを追加してください：
-                    // public void setCalculationArea(int val) { this.calculationArea = val; }
 
-                    // ここではとりあえずSetterがある前提、もしくはcopyFromのようなメソッドで更新します
-                    // 今回は個別にセットする形を想定
-                    stats.setMentalLoad(this.mentalLoad);
-
-                    // MagicStats側に同期専用のメソッドを作るとスマートです（後述）
-                    stats.syncClient(this.currentPsion, this.maxPsion, this.calculationArea, this.mentalLoad);
-                });
+    public void handle(Supplier<NetworkEvent.Context> ctx) {
+        ctx.get().enqueueWork(() -> {
+            // クライアント側で受信した場合のみ処理
+            if (ctx.get().getDirection().getReceptionSide().isClient()) {
+                // 専用ハンドラーに丸投げする（これでサーバー側でのクラッシュを回避）
+                ClientPacketHandler.handlePacket(this.currentPsion, this.maxPsion, this.calculationArea, this.mentalLoad);
             }
         });
-        return true;
+        ctx.get().setPacketHandled(true);
     }
 }
