@@ -1,9 +1,7 @@
 package com.COLLABOMOD.collabomod.register;
 
-import com.COLLABOMOD.collabomod.entity.EntityGramDemolition;
-import com.COLLABOMOD.collabomod.entity.EntityMistDispersion;
+import com.COLLABOMOD.collabomod.entity.*;
 import com.COLLABOMOD.collabomod.main.CollaboMod;
-import com.COLLABOMOD.collabomod.entity.EntityMaterialBurst;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -38,6 +36,20 @@ public class EntityRegister {
                     .clientTrackingRange(10)
                     .updateInterval(1)
                     .build("material_burst"));
+
+    public static final RegistryObject<EntityType<EntityAirBullet>> AIR_BULLET = ENTITIES.register("air_bullet",
+            () -> EntityType.Builder.<EntityAirBullet>of(EntityAirBullet::new, MobCategory.MISC)
+                    .sized(0.5F, 0.5F) // 当たり判定のサイズ
+                    .clientTrackingRange(4) // 描画距離
+                    .updateInterval(20)     // 更新頻度
+                    .build("air_bullet"));
+
+    public static final RegistryObject<EntityType<EntityMagicSequence>> MAGIC_SEQUENCE = ENTITIES.register("magic_sequence",
+            () -> EntityType.Builder.<EntityMagicSequence>of(EntityMagicSequence::new, MobCategory.MISC)
+                    .sized(0.5F, 0.5F) // サイズ
+                    .clientTrackingRange(10) // 描画距離
+                    .updateInterval(1)       // 更新頻度（回転アニメーションのため1）
+                    .build("magic_sequence"));
 
     public static void register(IEventBus eventBus) {
 
