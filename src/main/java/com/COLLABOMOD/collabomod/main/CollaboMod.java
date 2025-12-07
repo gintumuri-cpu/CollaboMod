@@ -2,7 +2,7 @@ package com.COLLABOMOD.collabomod.main;
 
 import com.COLLABOMOD.collabomod.command.PsionCommand;
 import com.COLLABOMOD.collabomod.magic.SpellRegistry;
-import com.COLLABOMOD.collabomod.register.EntityRegister;
+import com.COLLABOMOD.collabomod.register.*;
 import net.minecraft.client.renderer.entity.EntityRenderers;
 import net.minecraft.client.renderer.entity.NoopRenderer;
 import net.minecraftforge.event.RegisterCommandsEvent;
@@ -10,8 +10,6 @@ import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import com.COLLABOMOD.collabomod.main.tab.CollaboModBlockTab;
 import com.COLLABOMOD.collabomod.main.tab.CollaboModTab;
 import com.COLLABOMOD.collabomod.network.NetworkHandler;
-import com.COLLABOMOD.collabomod.register.BlockRegister;
-import com.COLLABOMOD.collabomod.register.ItemRegister;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.common.Mod;
@@ -38,6 +36,8 @@ public class CollaboMod {
         BlockRegister.register(eventBus);
         NetworkHandler.register();
         EntityRegister.register(eventBus);
+        BlockEntityRegister.register(eventBus);
+        MenuTypeRegister.register(eventBus);
 
     }
 

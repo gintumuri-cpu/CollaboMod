@@ -8,11 +8,13 @@ import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
+import com.COLLABOMOD.collabomod.block.MagicConsoleBlock;
 
 import java.util.function.Supplier;
 
 public class BlockRegister {
     public static final DeferredRegister<Block> BLOCKS = DeferredRegister.create(ForgeRegistries.BLOCKS, CollaboMod.MOD_ID);
+    public static final RegistryObject<Block> MAGIC_CONSOLE = registerBlockItem("magic_console", MagicConsoleBlock::new);
 
 
 

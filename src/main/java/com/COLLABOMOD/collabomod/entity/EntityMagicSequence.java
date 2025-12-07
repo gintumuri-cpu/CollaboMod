@@ -1,16 +1,16 @@
 package com.COLLABOMOD.collabomod.entity;
-import com.COLLABOMOD.collabomod.magic.IMagicSpell;
-import com.COLLABOMOD.collabomod.magic.SpellRegistry;
+import com.COLLABOMOD.collabomod.magic.MagicComponentType; // 新しいEnum
+import com.COLLABOMOD.collabomod.magic.VisualMetadata;
 import com.COLLABOMOD.collabomod.register.EntityRegister;
-import com.COLLABOMOD.collabomod.util.MagicSpellType;
+import com.mojang.math.Vector3f;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
@@ -18,13 +18,21 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkHooks;
 
-import java.util.UUID;
+import java.util.ArrayList;
+import java.util.List;
 
 public class EntityMagicSequence extends Entity {
 
-    private static final EntityDataAccessor<Integer> SPELL_TYPE_ID = SynchedEntityData.defineId(EntityMagicSequence.class, EntityDataSerializers.INT);
+    // ビジュアル同期用
+    private static final EntityDataAccessor<String> VISUAL_ID = SynchedEntityData.defineId(EntityMagicSequence.class, EntityDataSerializers.STRING);
+    private static final EntityDataAccessor<Float> COLOR_R = SynchedEntityData.defineId(EntityMagicSequence.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> COLOR_G = SynchedEntityData.defineId(EntityMagicSequence.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> COLOR_B = SynchedEntityData.defineId(EntityMagicSequence.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Integer> CASTER_ID = SynchedEntityData.defineId(EntityMagicSequence.class, EntityDataSerializers.INT);
 
+    // 実行するコンポーネントのリスト（サーバー側のみで保持すればOK）
+    private final List<MagicComponentType> components = new ArrayList<>();
+    private int castTime = 20;
     private int age = 0;
 
     public EntityMagicSequence(EntityType<?> type, Level level) {
@@ -32,36 +40,42 @@ public class EntityMagicSequence extends Entity {
         this.noCulling = true;
     }
 
-    public EntityMagicSequence(Level level, LivingEntity caster, MagicSpellType type, Vec3 pos) {
+    // ■ コンストラクタ修正: リストを受け取る
+    public EntityMagicSequence(Level level, LivingEntity caster, List<MagicComponentType> components, VisualMetadata meta, int castTime, Vec3 pos) {
         this(EntityRegister.MAGIC_SEQUENCE.get(), level);
         this.setPos(pos);
-        this.entityData.set(SPELL_TYPE_ID, type.ordinal());
+
+        this.components.addAll(components);
+        this.castTime = castTime;
+
+        // ビジュアルデータの同期
+        this.entityData.set(VISUAL_ID, meta.rendererID);
+        this.entityData.set(COLOR_R, meta.color.x());
+        this.entityData.set(COLOR_G, meta.color.y());
+        this.entityData.set(COLOR_B, meta.color.z());
         this.entityData.set(CASTER_ID, caster.getId());
 
-        if (type.isAttachedToCaster) {
-            this.setXRot(caster.getXRot());
-            this.setYRot(caster.getYRot());
-        }
+        this.setXRot(caster.getXRot());
+        this.setYRot(caster.getYRot());
     }
 
     @Override
     protected void defineSynchedData() {
-        this.entityData.define(SPELL_TYPE_ID, 0);
+        this.entityData.define(VISUAL_ID, "default");
+        this.entityData.define(COLOR_R, 1.0F);
+        this.entityData.define(COLOR_G, 1.0F);
+        this.entityData.define(COLOR_B, 1.0F);
         this.entityData.define(CASTER_ID, -1);
     }
 
-    public MagicSpellType getSpellType() {
-        int id = this.entityData.get(SPELL_TYPE_ID);
-        if (id < 0 || id >= MagicSpellType.values().length) return MagicSpellType.AIR_BULLET;
-        return MagicSpellType.values()[id];
-    }
+    // クライアント用Getter
+    public String getRendererID() { return this.entityData.get(VISUAL_ID); }
+    public Vector3f getColor() { return new Vector3f(this.entityData.get(COLOR_R), this.entityData.get(COLOR_G), this.entityData.get(COLOR_B)); }
 
     @Override
     public void tick() {
         super.tick();
         this.age++;
-
-        MagicSpellType type = getSpellType();
 
         if (!this.level.isClientSide) {
             Entity casterEntity = level.getEntity(this.entityData.get(CASTER_ID));
@@ -70,42 +84,57 @@ public class EntityMagicSequence extends Entity {
                 return;
             }
 
-            // 手元追従型の場合の位置更新（グラムデモリッションなど）
-            if (type.isAttachedToCaster && casterEntity instanceof LivingEntity livingCaster) {
-                Vec3 look = livingCaster.getLookAngle();
-                Vec3 pos = livingCaster.getEyePosition().add(look.scale(1.5));
-                this.setPos(pos);
-                this.setXRot(livingCaster.getXRot());
-                this.setYRot(livingCaster.getYRot());
-            }
-
-            if (this.age >= type.castTime) {
-                executeSpell(type, (LivingEntity)casterEntity);
+            // キャスト完了
+            if (this.age >= this.castTime) {
+                // ■ リスト内の全コンポーネントを実行
+                for (MagicComponentType comp : components) {
+                    comp.logic.execute(level, (LivingEntity)casterEntity, this.position(), this.getXRot(), this.getYRot());
+                }
                 this.discard();
             }
         }
     }
 
-    private void executeSpell(MagicSpellType type, LivingEntity caster) {
-        // ■ 修正: Registryから呼び出して実行するだけ
-        IMagicSpell spell = SpellRegistry.getSpell(type);
+    // ■ NBT保存・読み込み（リスト対応）
+    @Override
+    protected void addAdditionalSaveData(CompoundTag tag) {
+        tag.putInt("Age", this.age);
+        tag.putInt("CastTime", this.castTime);
 
-        if (spell != null) {
-            // 魔法陣の位置(this)と回転(Rot)を渡して実行
-            spell.execute(level, caster, this.position(), this.getXRot(), this.getYRot());
+        // コンポーネントリストを保存
+        ListTag list = new ListTag();
+        for (MagicComponentType comp : components) {
+            list.add(StringTag.valueOf(comp.name()));
         }
+        tag.put("Components", list);
+
+        // ビジュアルデータも保存（同期用）
+        tag.putString("VisID", getRendererID());
+        tag.putFloat("CR", this.entityData.get(COLOR_R));
+        tag.putFloat("CG", this.entityData.get(COLOR_G));
+        tag.putFloat("CB", this.entityData.get(COLOR_B));
+        tag.putInt("Caster", this.entityData.get(CASTER_ID));
     }
 
     @Override
     protected void readAdditionalSaveData(CompoundTag tag) {
         this.age = tag.getInt("Age");
-        this.entityData.set(SPELL_TYPE_ID, tag.getInt("SpellType"));
-    }
+        this.castTime = tag.getInt("CastTime");
 
-    @Override
-    protected void addAdditionalSaveData(CompoundTag tag) {
-        tag.putInt("Age", this.age);
-        tag.putInt("SpellType", this.entityData.get(SPELL_TYPE_ID));
+        // リスト復元
+        this.components.clear();
+        ListTag list = tag.getList("Components", Tag.TAG_STRING);
+        for (int i = 0; i < list.size(); i++) {
+            try {
+                this.components.add(MagicComponentType.valueOf(list.getString(i)));
+            } catch (Exception ignored) {}
+        }
+
+        this.entityData.set(VISUAL_ID, tag.getString("VisID"));
+        this.entityData.set(COLOR_R, tag.getFloat("CR"));
+        this.entityData.set(COLOR_G, tag.getFloat("CG"));
+        this.entityData.set(COLOR_B, tag.getFloat("CB"));
+        this.entityData.set(CASTER_ID, tag.getInt("Caster"));
     }
 
     @Override
