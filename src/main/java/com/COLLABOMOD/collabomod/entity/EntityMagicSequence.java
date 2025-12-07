@@ -49,11 +49,9 @@ public class EntityMagicSequence extends Entity {
     public EntityMagicSequence(Level level, LivingEntity caster, List<MagicComponentType> components, VisualMetadata meta, int castTime, Vec3 pos) {
         this(EntityRegister.MAGIC_SEQUENCE.get(), level);
         this.setPos(pos);
-
         this.components.addAll(components);
         this.castTime = castTime;
 
-        // ビジュアルデータの同期
         this.entityData.set(VISUAL_ID, meta.rendererID);
         this.entityData.set(COLOR_R, meta.color.x());
         this.entityData.set(COLOR_G, meta.color.y());
@@ -71,6 +69,7 @@ public class EntityMagicSequence extends Entity {
         this.entityData.define(COLOR_G, 1.0F);
         this.entityData.define(COLOR_B, 1.0F);
         this.entityData.define(CASTER_ID, -1);
+        this.entityData.define(TARGET_ID, -1);
     }
 
     public void setTarget(LivingEntity target) {

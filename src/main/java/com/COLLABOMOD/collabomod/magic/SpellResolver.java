@@ -8,8 +8,6 @@ public class SpellResolver {
     // 複数のコンポーネントから「最終的な見た目」を決定する
     public static VisualMetadata resolveVisuals(List<MagicComponentType> components) {
         VisualMetadata finalMeta = new VisualMetadata();
-
-        // 全てのマージ処理
         for (MagicComponentType comp : components) {
             finalMeta.merge(comp.visuals);
         }
@@ -25,16 +23,28 @@ public class SpellResolver {
         return cost;
     }
 
-    // 最大キャスト時間の計算（一番遅い工程に合わせる）
-    // ※今回はMagicComponentTypeにcastTimeフィールドがないため、仮計算とします
-    // 本来はEnumにcastTimeを持たせるべきです
+    // ■ 修正: 新しいコンポーネントに対応した時間計算
     public static int calculateCastTime(List<MagicComponentType> components) {
-        int maxTime = 10; // 最低保証
+        int maxTime = 20; // 基本キャストタイム (1秒)
+
         for (MagicComponentType comp : components) {
-            // 仮: 戦略級なら長く、射撃なら短いなどの判定
-            if (comp == MagicComponentType.MATERIAL_BURST) maxTime = Math.max(maxTime, 100);
-            else if (comp == MagicComponentType.PROJECTILE_GRAM) maxTime = Math.max(maxTime, 0); // 即時
-            else maxTime = Math.max(maxTime, 20); // 通常
+
+            // 1. 戦略級モジュールがある場合 -> 詠唱時間を長くする
+            if (comp == MagicComponentType.MOD_STRATEGIC) {
+                maxTime = Math.max(maxTime, 100); // 5秒
+            }
+
+            // 2. 分解属性がある場合（グラム） -> 即時発動にする
+            // グラムは「魔法式を展開せずに発射する」魔法なので 0 にする
+            else if (comp == MagicComponentType.ATTRIB_DECOMPOSITION) {
+                return 0; // 強制的に即時発動
+            }
+
+            // その他: 必要なら他のコンポーネントでも時間を調整
+            // 例: ACT_RESTORE (回復) は少し長い、など
+            else if (comp == MagicComponentType.ACT_RESTORE) {
+                maxTime = Math.max(maxTime, 40);
+            }
         }
         return maxTime;
     }
