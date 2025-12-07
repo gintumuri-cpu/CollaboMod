@@ -4,6 +4,7 @@ import com.COLLABOMOD.collabomod.item.ItemSpellComponent;
 import com.COLLABOMOD.collabomod.main.CollaboMod;
 import com.COLLABOMOD.collabomod.item.ItemCAD;
 import com.COLLABOMOD.collabomod.item.ItemSilverHorn;
+import com.COLLABOMOD.collabomod.item.ItemEmptyCAD;
 import net.minecraft.world.item.Item;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
@@ -17,6 +18,7 @@ public class ItemRegister {
     public static final RegistryObject<Item> TEST_CAD = ITEMS.register("test_cad", ItemCAD::new);
     public static final RegistryObject<Item> SILVER_HORN = ITEMS.register("silver_horn", ItemSilverHorn::new);
     public static final RegistryObject<Item> THIRD_EYE = ITEMS.register("third_eye", ItemThirdEye::new);
+    public static final RegistryObject<Item> EMPTY_CAD = ITEMS.register("empty_cad", ItemEmptyCAD::new);
 
     public static final RegistryObject<Item> COMP_AIR_BULLET = ITEMS.register("comp_air_bullet",
             () -> new ItemSpellComponent(com.COLLABOMOD.collabomod.magic.MagicComponentType.PROJECTILE_AIR));

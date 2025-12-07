@@ -9,7 +9,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
-public class ItemThirdEye extends Item{
+public class ItemThirdEye extends Item implements ICAD{
 
     public ItemThirdEye() {
         super(new Item.Properties().tab(CollaboMod.COLLABOMOD_TAB).stacksTo(1));

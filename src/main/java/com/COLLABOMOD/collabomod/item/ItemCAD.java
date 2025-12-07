@@ -36,7 +36,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 import java.util.Random;
 
-public class ItemCAD extends Item {
+public class ItemCAD extends Item implements ICAD{
 
     private final Random random = new Random();
 
@@ -159,7 +159,6 @@ public class ItemCAD extends Item {
 
     // --- Helper Methods ---
 
-    // NBTからコンポーネントを読み込む（なければエアバレット）
     private List<MagicComponentType> getInstalledComponents(ItemStack stack) {
         List<MagicComponentType> list = new ArrayList<>();
         CompoundTag tag = stack.getOrCreateTag();
@@ -171,10 +170,10 @@ public class ItemCAD extends Item {
                     list.add(MagicComponentType.valueOf(tagList.getString(i)));
                 } catch (Exception ignored) {}
             }
-        } else {
-            // デフォルト: エア・バレット単体
-            list.add(MagicComponentType.PROJECTILE_AIR);
         }
+        // ■ 修正: elseブロック（デフォルトでエアバレット追加）を削除しました
+        // これで NBT がない時は size 0 のリストが返ります
+
         return list;
     }
 

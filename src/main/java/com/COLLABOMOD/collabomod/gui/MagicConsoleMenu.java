@@ -2,6 +2,13 @@ package com.COLLABOMOD.collabomod.gui;
 
 import com.COLLABOMOD.collabomod.block.MagicConsoleBlock;
 import com.COLLABOMOD.collabomod.block.entity.MagicConsoleBlockEntity;
+import com.COLLABOMOD.collabomod.item.*;
+import com.COLLABOMOD.collabomod.item.ICAD;
+import com.COLLABOMOD.collabomod.item.ItemCAD;
+import com.COLLABOMOD.collabomod.item.ItemSilverHorn;
+import com.COLLABOMOD.collabomod.item.ItemEmptyCAD;
+import com.COLLABOMOD.collabomod.item.ItemSpellComponent;
+import com.COLLABOMOD.collabomod.item.ItemThirdEye;
 import com.COLLABOMOD.collabomod.register.BlockRegister;
 import com.COLLABOMOD.collabomod.register.MenuTypeRegister;
 import net.minecraft.network.FriendlyByteBuf;
@@ -12,6 +19,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraftforge.items.CapabilityItemHandler;
 import net.minecraftforge.items.SlotItemHandler;
+import org.jetbrains.annotations.NotNull;
 
 public class MagicConsoleMenu extends AbstractContainerMenu {
 
@@ -29,13 +37,26 @@ public class MagicConsoleMenu extends AbstractContainerMenu {
         this.blockEntity = (MagicConsoleBlockEntity) entity;
         this.access = ContainerLevelAccess.create(inv.player.level, entity.getBlockPos());
 
-        // ブロックエンティティのインベントリ（CADスロット）を追加
         this.blockEntity.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY).ifPresent(handler -> {
-            // スロット番号0, X座標80, Y座標35 (画面中央あたり)
-            this.addSlot(new SlotItemHandler(handler, 0, 80, 35));
+            // ■ Slot 0: CAD配置スロット (左側)
+            this.addSlot(new SlotItemHandler(handler, 0, 26, 35) {
+                @Override
+                public boolean mayPlace(@NotNull ItemStack stack) {
+                    return stack.getItem() instanceof ICAD;
+                }
+            });
+
+            // ■ Slot 1-3: コンポーネントスロット (中央～右)
+            for (int i = 0; i < 3; i++) {
+                this.addSlot(new SlotItemHandler(handler, 1 + i, 80 + (i * 18), 35) {
+                    @Override
+                    public boolean mayPlace(@NotNull ItemStack stack) {
+                        return stack.getItem() instanceof ItemSpellComponent;
+                    }
+                });
+            }
         });
 
-        // プレイヤーのインベントリを追加 (定型文)
         addPlayerInventory(inv);
         addPlayerHotbar(inv);
     }

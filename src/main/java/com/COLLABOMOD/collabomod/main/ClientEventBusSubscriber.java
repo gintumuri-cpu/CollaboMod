@@ -7,6 +7,9 @@ import net.minecraft.client.renderer.entity.EntityRenderers;
 import com.COLLABOMOD.collabomod.client.renderer.RenderMaterialBurst;
 import com.COLLABOMOD.collabomod.client.renderer.RenderMagicSequence;
 import net.minecraft.client.renderer.entity.NoopRenderer;
+import net.minecraft.client.gui.screens.MenuScreens;
+import com.COLLABOMOD.collabomod.register.MenuTypeRegister;
+import com.COLLABOMOD.collabomod.client.gui.MagicConsoleScreen;
 import net.minecraftforge.api.distmarker.Dist;
 
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -28,6 +31,10 @@ public class ClientEventBusSubscriber {
 
             // ■ 修正: マテリアル・バーストに専用レンダラーを割り当て
             EntityRenderers.register(EntityRegister.MATERIAL_BURST.get(), RenderMaterialBurst::new);
+
+        event.enqueueWork(() -> {
+            MenuScreens.register(MenuTypeRegister.MAGIC_CONSOLE_MENU.get(), MagicConsoleScreen::new);
+        });
         }
     }
 

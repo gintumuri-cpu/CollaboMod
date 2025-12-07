@@ -25,5 +25,10 @@ public class NetworkHandler {
                 PacketMaterialBurst::toBytes,
                 PacketMaterialBurst::new,
                 PacketMaterialBurst::handle);
+        INSTANCE.registerMessage(id++,
+                PacketInstallSpell.class,
+                PacketInstallSpell::toBytes,
+                PacketInstallSpell::new,
+                PacketInstallSpell::handle);
     }
 }

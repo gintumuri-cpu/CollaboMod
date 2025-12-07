@@ -27,7 +27,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
-public class ItemSilverHorn extends Item {
+public class ItemSilverHorn extends Item implements ICAD{
 
     private final float hardwarePerformance = 2.0F;
 
