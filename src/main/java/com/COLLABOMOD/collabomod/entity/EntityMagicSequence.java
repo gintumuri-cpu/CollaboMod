@@ -1,5 +1,8 @@
 package com.COLLABOMOD.collabomod.entity;
-import com.COLLABOMOD.collabomod.magic.MagicComponentType; // 新しいEnum
+
+import com.COLLABOMOD.collabomod.magic.MagicComponentType;// 新しいEnum
+import com.COLLABOMOD.collabomod.magic.SpellExecutor; // 追加
+import com.COLLABOMOD.collabomod.magic.SpellContext;
 import com.COLLABOMOD.collabomod.magic.VisualMetadata;
 import com.COLLABOMOD.collabomod.register.EntityRegister;
 import com.mojang.math.Vector3f;
@@ -29,6 +32,8 @@ public class EntityMagicSequence extends Entity {
     private static final EntityDataAccessor<Float> COLOR_G = SynchedEntityData.defineId(EntityMagicSequence.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> COLOR_B = SynchedEntityData.defineId(EntityMagicSequence.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Integer> CASTER_ID = SynchedEntityData.defineId(EntityMagicSequence.class, EntityDataSerializers.INT);
+
+    private static final EntityDataAccessor<Integer> TARGET_ID = SynchedEntityData.defineId(EntityMagicSequence.class, EntityDataSerializers.INT);
 
     // 実行するコンポーネントのリスト（サーバー側のみで保持すればOK）
     private final List<MagicComponentType> components = new ArrayList<>();
@@ -68,6 +73,12 @@ public class EntityMagicSequence extends Entity {
         this.entityData.define(CASTER_ID, -1);
     }
 
+    public void setTarget(LivingEntity target) {
+        if (target != null) {
+            this.entityData.set(TARGET_ID, target.getId());
+        }
+    }
+
     // クライアント用Getter
     public String getRendererID() { return this.entityData.get(VISUAL_ID); }
     public Vector3f getColor() { return new Vector3f(this.entityData.get(COLOR_R), this.entityData.get(COLOR_G), this.entityData.get(COLOR_B)); }
@@ -86,10 +97,27 @@ public class EntityMagicSequence extends Entity {
 
             // キャスト完了
             if (this.age >= this.castTime) {
-                // ■ リスト内の全コンポーネントを実行
-                for (MagicComponentType comp : components) {
-                    comp.logic.execute(level, (LivingEntity)casterEntity, this.position(), this.getXRot(), this.getYRot());
+                LivingEntity caster = (LivingEntity)casterEntity;
+
+                // Context作成
+                SpellContext ctx = new SpellContext(level, caster);
+                ctx.setLocation(this.position(), this.getXRot(), this.getYRot());
+
+                // ■ 追加: ターゲット情報の復元
+                int targetId = this.entityData.get(TARGET_ID);
+                if (targetId != -1) {
+                    Entity t = level.getEntity(targetId);
+                    if (t instanceof LivingEntity livingTarget) {
+                        ctx.target = livingTarget;
+                    }
                 }
+
+                // コンポーネント適用 & 実行
+                for (MagicComponentType comp : components) {
+                    comp.apply(ctx);
+                }
+                SpellExecutor.execute(ctx);
+
                 this.discard();
             }
         }
@@ -114,6 +142,7 @@ public class EntityMagicSequence extends Entity {
         tag.putFloat("CG", this.entityData.get(COLOR_G));
         tag.putFloat("CB", this.entityData.get(COLOR_B));
         tag.putInt("Caster", this.entityData.get(CASTER_ID));
+        tag.putInt("TargetID", this.entityData.get(TARGET_ID));
     }
 
     @Override

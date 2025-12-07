@@ -25,10 +25,15 @@ public class NetworkHandler {
                 PacketMaterialBurst::toBytes,
                 PacketMaterialBurst::new,
                 PacketMaterialBurst::handle);
+//        INSTANCE.registerMessage(id++,
+//                PacketInstallSpell.class,
+//                PacketInstallSpell::toBytes,
+//                PacketInstallSpell::new,
+//                PacketInstallSpell::handle);
         INSTANCE.registerMessage(id++,
-                PacketInstallSpell.class,
-                PacketInstallSpell::toBytes,
-                PacketInstallSpell::new,
-                PacketInstallSpell::handle);
+                PacketEditCAD.class,
+                PacketEditCAD::toBytes,
+                PacketEditCAD::new,
+                PacketEditCAD::handle);
     }
 }

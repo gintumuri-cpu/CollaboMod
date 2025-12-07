@@ -1,7 +1,6 @@
 package com.COLLABOMOD.collabomod.main;
 
 import com.COLLABOMOD.collabomod.command.PsionCommand;
-import com.COLLABOMOD.collabomod.magic.SpellRegistry;
 import com.COLLABOMOD.collabomod.register.*;
 import net.minecraft.client.renderer.entity.EntityRenderers;
 import net.minecraft.client.renderer.entity.NoopRenderer;
@@ -42,11 +41,7 @@ public class CollaboMod {
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {
-        // ■ 魔法ロジックの初期化
-        // スレッドセーフに実行するために enqueueWork を使います
-        event.enqueueWork(() -> {
-            SpellRegistry.init();
-        });
+
     }
     private void onRegisterCommands(RegisterCommandsEvent event) {
         PsionCommand.register(event.getDispatcher());

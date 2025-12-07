@@ -2,7 +2,6 @@ package com.COLLABOMOD.collabomod.network;
 
 import com.COLLABOMOD.collabomod.block.entity.MagicConsoleBlockEntity;
 import com.COLLABOMOD.collabomod.gui.MagicConsoleMenu;
-import com.COLLABOMOD.collabomod.item.ItemSpellComponent;
 import com.COLLABOMOD.collabomod.magic.MagicComponentType;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -42,13 +41,13 @@ public class PacketInstallSpell {
                     ListTag compList = new ListTag();
 
                     // スロット1〜3を走査
-                    for (int i = 1; i <= 3; i++) {
-                        ItemStack compStack = handler.getStackInSlot(i);
-                        if (!compStack.isEmpty() && compStack.getItem() instanceof ItemSpellComponent compItem) {
-                            MagicComponentType type = compItem.getComponentType();
-                            compList.add(StringTag.valueOf(type.name()));
-                        }
-                    }
+//                    for (int i = 1; i <= 5; i++) {
+//                        ItemStack compStack = handler.getStackInSlot(i);
+//                        if (!compStack.isEmpty() && compStack.getItem() instanceof ItemSpellComponent compItem) {
+//                            MagicComponentType type = compItem.getComponentType();
+//                            compList.add(StringTag.valueOf(type.name()));
+//                        }
+//                    }
 
                     // コンポーネントが1つ以上あれば書き込む
                     if (!compList.isEmpty()) {

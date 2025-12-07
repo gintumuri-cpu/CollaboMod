@@ -24,7 +24,7 @@ import org.jetbrains.annotations.Nullable;
 public class MagicConsoleBlockEntity extends BlockEntity implements MenuProvider {
 
     // アイテムスロット: 1個（CADを置く用）
-    private final ItemStackHandler itemHandler = new ItemStackHandler(4) {
+    private final ItemStackHandler itemHandler = new ItemStackHandler(6) {
         @Override
         protected void onContentsChanged(int slot) {
             setChanged();

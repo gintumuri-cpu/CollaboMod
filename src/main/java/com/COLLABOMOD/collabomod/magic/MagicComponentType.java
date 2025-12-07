@@ -2,45 +2,40 @@ package com.COLLABOMOD.collabomod.magic;
 
 import com.COLLABOMOD.collabomod.entity.EntityAirBullet;
 import com.COLLABOMOD.collabomod.entity.EntityGramDemolition;
-import com.COLLABOMOD.collabomod.entity.EntityMagicSequence;
 import com.COLLABOMOD.collabomod.entity.EntityMaterialBurst;
-import com.COLLABOMOD.collabomod.network.NetworkHandler;
-import com.COLLABOMOD.collabomod.network.PacketMaterialBurst;
-import com.COLLABOMOD.collabomod.util.MagicSpellType;
 import com.mojang.math.Vector3f;
-import net.minecraft.core.BlockPos;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.EntityHitResult;
-import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.Random;
+import java.util.function.Consumer;
 
 public enum MagicComponentType {
 
-    // ■ 1. 射撃系コンポーネント
+    // ■■■ 1. 複合魔法コンポーネント (ItemRegisterで使用) ■■■
+    // これらが「ディスク」として登録されているものです
+
     // エア・バレット
     PROJECTILE_AIR(
             (level, caster, origin, rotX, rotY) -> {
                 EntityAirBullet bullet = new EntityAirBullet(level, caster);
                 bullet.setPos(origin.x, origin.y, origin.z);
+
+                // 回転からベクトル計算
                 float f = 0.017453292F;
                 double x = -Math.sin(rotY * f) * Math.cos(rotX * f);
                 double y = -Math.sin(rotX * f);
                 double z = Math.cos(rotY * f) * Math.cos(rotX * f);
+
                 bullet.shoot(x, y, z, 3.0F, 0.5F);
                 level.addFreshEntity(bullet);
                 level.playSound(null, origin.x, origin.y, origin.z, SoundEvents.PHANTOM_FLAP, SoundSource.PLAYERS, 2.0F, 1.5F);
             },
             // VisualMetadata(ID, Priority, Color, Scale)
             new VisualMetadata("magic_circle", 5, new Vector3f(0.9F, 0.9F, 1.0F), 1.0F),
-            20
+            20 // cost
     ),
 
     // グラム・デモリッション
@@ -54,10 +49,9 @@ public enum MagicComponentType {
                 level.playSound(null, origin.x, origin.y, origin.z, SoundEvents.TRIDENT_THROW, SoundSource.PLAYERS, 1.0F, 0.5F);
             },
             new VisualMetadata("magic_circle", 5, new Vector3f(0.2F, 0.9F, 1.0F), 1.0F),
-            40
+            40 // cost
     ),
 
-    // ■ 2. 戦略級コンポーネント
     // マテリアル・バースト
     MATERIAL_BURST(
             (level, caster, origin, rotX, rotY) -> {
@@ -65,16 +59,25 @@ public enum MagicComponentType {
                 level.addFreshEntity(burst);
                 level.playSound(null, origin.x, origin.y, origin.z, SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.WEATHER, 100.0F, 0.5F);
             },
-            // 優先度100！
+            // 優先度100 (見た目を強制上書き)
             new VisualMetadata("material_burst", 100, new Vector3f(0.2F, 0.9F, 1.0F), 2.0F),
-            50
+            50 // cost
     );
 
-    // --- フィールド ---
-    public final ComponentLogic logic;
-    public final VisualMetadata visuals; // 変更: 直接Metadataを持つ
-    public final int cost;
+    // ■■■ 2. 基礎コンポーネント (将来の拡張用) ■■■
+    /* ACT_SHOOT( ... ),
+    ATTRIB_AIR( ... ),
+    など、細分化した部品は後でここに追加していけばOKです。
+    現在はエラー回避のため、上記3つがあれば動きます。
+    */
 
+
+    // --- フィールド変数 ---
+    public final ComponentLogic logic;
+    public final VisualMetadata visuals;
+    public final int cost; // ★これがないとSpellResolverでエラーになります
+
+    // コンストラクタ
     MagicComponentType(ComponentLogic logic, VisualMetadata visuals, int cost) {
         this.logic = logic;
         this.visuals = visuals;
@@ -85,5 +88,11 @@ public enum MagicComponentType {
     @FunctionalInterface
     public interface ComponentLogic {
         void execute(Level level, LivingEntity caster, Vec3 origin, float rotX, float rotY);
+    }
+
+    // SpellContext用のapplyメソッド (将来的に使用)
+    public void apply(SpellContext context) {
+        // 現在はロジック直書き型なので、ここは空でもOK
+        // 将来的にパラメータ変動型にする場合、ここに記述します
     }
 }

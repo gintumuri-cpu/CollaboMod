@@ -2,10 +2,8 @@ package com.COLLABOMOD.collabomod.item;
 
 import com.COLLABOMOD.collabomod.capability.MagicStatsProvider;
 import com.COLLABOMOD.collabomod.entity.EntityMagicSequence;
-import com.COLLABOMOD.collabomod.magic.MagicComponentType; // 新Enum
+import com.COLLABOMOD.collabomod.magic.*;
 import com.COLLABOMOD.collabomod.main.CollaboMod;
-import com.COLLABOMOD.collabomod.magic.SpellResolver; // 追加
-import com.COLLABOMOD.collabomod.magic.VisualMetadata; // 追加
 import net.minecraft.nbt.ListTag; // 追加
 import net.minecraft.nbt.StringTag; // 追加
 import net.minecraft.nbt.Tag; // 追加
@@ -122,27 +120,42 @@ public class ItemCAD extends Item implements ICAD{
                 if (cadStats.getCurrentPsion() >= cost) {
                     cadStats.setCurrentPsion(cadStats.getCurrentPsion() - cost);
                     cadStats.addMentalLoad(2);
+                    boolean isInstant = (castTime <= 0);
 
-                    // --- エア・バレット的な魔法陣展開 ---
-                    Vec3 targetPos = getTargetPosition(level, player, 30.0D);
-                    Vec3 spawnPos = getRandomSpawnPos(targetPos);
+                    if (isInstant) {
+                        // ■ 即時実行 (グラムなど)
+                        SpellContext ctx = new SpellContext(level, player);
+                        // コンポーネント適用
+                        for (MagicComponentType comp : components) {
+                            comp.apply(ctx);
+                        }
+                        SpellExecutor.execute(ctx);
 
-                    // 魔法式エンティティの生成（リストを渡す）
-                    EntityMagicSequence sequence = new EntityMagicSequence(
-                            level, player, components, visuals, castTime, spawnPos
-                    );
+                    } else {
+                        // ■ 魔法陣展開 (エア・バレットなど)
+                        Vec3 targetPos = getTargetPosition(level, player, 30.0D);
+                        Vec3 spawnPos = getRandomSpawnPos(targetPos);
 
-                    lookAt(sequence, targetPos);
-                    level.addFreshEntity(sequence);
+                        EntityMagicSequence sequence = new EntityMagicSequence(
+                                level, player, components, visuals, castTime, spawnPos
+                        );
 
-                    level.playSound(null, player.getX(), player.getY(), player.getZ(),
-                            SoundEvents.UI_BUTTON_CLICK, SoundSource.PLAYERS, 1.0F, 2.0F);
+                        lookAt(sequence, targetPos);
+                        EntityHitResult entityResult = ProjectileUtil.getEntityHitResult(
+                                level, player, player.getEyePosition(),
+                                player.getEyePosition().add(player.getLookAngle().scale(30.0)),
+                                player.getBoundingBox().expandTowards(player.getLookAngle().scale(30.0)).inflate(1.0),
+                                (e) -> !e.isSpectator() && e.isPickable()
+                        );
 
-                } else {
-                    if (player.tickCount % 20 == 0) {
+                        if (entityResult != null && entityResult.getEntity() instanceof LivingEntity livingTarget) {
+                            sequence.setTarget(livingTarget);
+                        }
+
+                        level.addFreshEntity(sequence);
+
                         level.playSound(null, player.getX(), player.getY(), player.getZ(),
-                                SoundEvents.DISPENSER_FAIL, SoundSource.PLAYERS, 0.5F, 1.0F);
-                        player.sendMessage(new TextComponent("想子不足"), Util.NIL_UUID);
+                                SoundEvents.UI_BUTTON_CLICK, SoundSource.PLAYERS, 1.0F, 2.0F);
                     }
                 }
             }
@@ -185,14 +198,14 @@ public class ItemCAD extends Item implements ICAD{
 
         // ロジック: エア・バレット単体なら -> 複合（エア＋グラム）にする
         // それ以外なら -> エア・バレット単体に戻す
-        if (current.size() == 1 && current.get(0) == MagicComponentType.PROJECTILE_AIR) {
-            newList.add(StringTag.valueOf(MagicComponentType.PROJECTILE_AIR.name()));
-            newList.add(StringTag.valueOf(MagicComponentType.PROJECTILE_GRAM.name()));
-            msg = "§5[複合] エア・バレット + グラム";
-        } else {
-            newList.add(StringTag.valueOf(MagicComponentType.PROJECTILE_AIR.name()));
-            msg = "§b[単体] エア・バレット";
-        }
+//        if (current.size() == 1 && current.get(0) == MagicComponentType.PROJECTILE_AIR) {
+//            newList.add(StringTag.valueOf(MagicComponentType.PROJECTILE_AIR.name()));
+//            newList.add(StringTag.valueOf(MagicComponentType.PROJECTILE_GRAM.name()));
+//            msg = "§5[複合] エア・バレット + グラム";
+//        } else {
+//            newList.add(StringTag.valueOf(MagicComponentType.PROJECTILE_AIR.name()));
+//            msg = "§b[単体] エア・バレット";
+//        }
 //        if (current.size() == 1 && current.get(0) == MagicComponentType.PROJECTILE_AIR) {
 //            // ■ 実験: エア・バレット と マテリアル・バースト を合成
 //            newList.add(StringTag.valueOf(MagicComponentType.PROJECTILE_AIR.name()));

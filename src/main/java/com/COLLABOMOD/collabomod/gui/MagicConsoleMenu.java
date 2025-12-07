@@ -7,7 +7,6 @@ import com.COLLABOMOD.collabomod.item.ICAD;
 import com.COLLABOMOD.collabomod.item.ItemCAD;
 import com.COLLABOMOD.collabomod.item.ItemSilverHorn;
 import com.COLLABOMOD.collabomod.item.ItemEmptyCAD;
-import com.COLLABOMOD.collabomod.item.ItemSpellComponent;
 import com.COLLABOMOD.collabomod.item.ItemThirdEye;
 import com.COLLABOMOD.collabomod.register.BlockRegister;
 import com.COLLABOMOD.collabomod.register.MenuTypeRegister;
@@ -39,7 +38,7 @@ public class MagicConsoleMenu extends AbstractContainerMenu {
 
         this.blockEntity.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY).ifPresent(handler -> {
             // ■ Slot 0: CAD配置スロット (左側)
-            this.addSlot(new SlotItemHandler(handler, 0, 26, 35) {
+            this.addSlot(new SlotItemHandler(handler, 0, 20, 35) {
                 @Override
                 public boolean mayPlace(@NotNull ItemStack stack) {
                     return stack.getItem() instanceof ICAD;
@@ -47,11 +46,11 @@ public class MagicConsoleMenu extends AbstractContainerMenu {
             });
 
             // ■ Slot 1-3: コンポーネントスロット (中央～右)
-            for (int i = 0; i < 3; i++) {
-                this.addSlot(new SlotItemHandler(handler, 1 + i, 80 + (i * 18), 35) {
+            for (int i = 0; i < 5; i++) {
+                this.addSlot(new SlotItemHandler(handler, 1 + i, 60 + (i * 18), 35) {
                     @Override
                     public boolean mayPlace(@NotNull ItemStack stack) {
-                        return stack.getItem() instanceof ItemSpellComponent;
+                        return stack.getItem() instanceof ICAD;
                     }
                 });
             }
