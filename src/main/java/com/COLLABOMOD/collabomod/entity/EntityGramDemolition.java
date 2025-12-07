@@ -51,24 +51,47 @@ public class EntityGramDemolition extends ThrowableProjectile {
         }
     }
 
-    // エンティティ（モブやプレイヤー）に当たった時の処理
+    // ■■■ 対抗魔法処理 ■■■
     @Override
     protected void onHitEntity(EntityHitResult result) {
         super.onHitEntity(result);
         Entity target = result.getEntity();
 
-        float physicalDamage = 1.0F; // 0.5ハート
-        target.hurt(DamageSource.MAGIC, physicalDamage);
+        // 1. 魔法式（魔法陣）に当たった場合 -> 術式解散
+        if (target instanceof EntityMagicSequence) {
+            target.discard(); // 魔法陣を消去（発動キャンセル）
 
-        // 2. 魔法的要素（バフ・デバフ）をすべて吹き飛ばす
-        if (target instanceof LivingEntity living) {
-            living.removeAllEffects(); // ポーション効果全消去
+            // 演出: 解散のエフェクト（白い煙と音）
+            this.level.addParticle(ParticleTypes.CLOUD, target.getX(), target.getY(), target.getZ(), 0, 0, 0);
+            this.level.playSound(null, target.getX(), target.getY(), target.getZ(),
+                    net.minecraft.sounds.SoundEvents.GENERIC_EXTINGUISH_FIRE,
+                    net.minecraft.sounds.SoundSource.PLAYERS, 1.0F, 2.0F);
+
+            return; // 貫通せずに終了
         }
 
-        // 3. 強烈なノックバック（物理的な衝撃）
-        // ベクトルを正規化して、強く押し出す
-        Vec3 knockback = this.getDeltaMovement().normalize().scale(2.5); // 強め
-        target.setDeltaMovement(target.getDeltaMovement().add(knockback));
+        // 2. 敵の魔法弾（エアバレットなど）に当たった場合 -> 迎撃
+        if (target instanceof EntityAirBullet) {
+            target.discard(); // 弾を消去
+            // 演出: 衝撃
+            this.level.addParticle(ParticleTypes.EXPLOSION, target.getX(), target.getY(), target.getZ(), 0, 0, 0);
+            return;
+        }
+
+        // 3. 生き物（Mob/Player）に当たった場合 -> ダメージ＆ノックバック
+        if (target instanceof LivingEntity) {
+            float baseDamage = 1.0F; // 物理威力は低い
+            float finalDamage = baseDamage * this.damageMultiplier;
+
+            target.hurt(DamageSource.MAGIC, finalDamage);
+
+            // 魔法効果の解除（バフ消し）
+            ((LivingEntity) target).removeAllEffects();
+
+            // 強いノックバック（吹き飛ばし）
+            Vec3 knockback = this.getDeltaMovement().normalize().scale(2.5);
+            target.setDeltaMovement(target.getDeltaMovement().add(knockback));
+        }
     }
 
     // 重力をゼロにする（真っ直ぐ飛ぶ）

@@ -1,4 +1,6 @@
 package com.COLLABOMOD.collabomod.entity;
+import com.COLLABOMOD.collabomod.magic.IMagicSpell;
+import com.COLLABOMOD.collabomod.magic.SpellRegistry;
 import com.COLLABOMOD.collabomod.register.EntityRegister;
 import com.COLLABOMOD.collabomod.util.MagicSpellType;
 import net.minecraft.nbt.CompoundTag;
@@ -85,23 +87,12 @@ public class EntityMagicSequence extends Entity {
     }
 
     private void executeSpell(MagicSpellType type, LivingEntity caster) {
-        switch (type) {
-            // ■ エア・バレットの発射処理
-            case AIR_BULLET:
-                EntityAirBullet bullet = new EntityAirBullet(level, caster);
-                bullet.setPos(this.getX(), this.getY(), this.getZ()); // 魔法陣の位置から
+        // ■ 修正: Registryから呼び出して実行するだけ
+        IMagicSpell spell = SpellRegistry.getSpell(type);
 
-                // ■ 修正: 魔法陣の向き（this.get...）を使って発射ベクトルを決める
-                // これで「魔法陣が向いている方向＝ターゲット」に飛びます
-                bullet.shootFromRotation(this, this.getXRot(), this.getYRot(), 0.0F, 3.0F, 0.5F);
-
-                level.addFreshEntity(bullet);
-                level.playSound(null, this.getX(), this.getY(), this.getZ(),
-                        SoundEvents.PHANTOM_FLAP, SoundSource.PLAYERS, 2.0F, 1.5F);
-                break;
-
-            default:
-                break;
+        if (spell != null) {
+            // 魔法陣の位置(this)と回転(Rot)を渡して実行
+            spell.execute(level, caster, this.position(), this.getXRot(), this.getYRot());
         }
     }
 
