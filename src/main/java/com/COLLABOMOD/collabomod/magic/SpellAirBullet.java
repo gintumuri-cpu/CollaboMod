@@ -3,7 +3,7 @@ package com.COLLABOMOD.collabomod.magic;
 import com.COLLABOMOD.collabomod.capability.MagicStats;
 import com.COLLABOMOD.collabomod.entity.EntityAirBullet;
 import com.COLLABOMOD.collabomod.entity.EntityMagicSequence;
-import com.COLLABOMOD.collabomod.util.MagicSpellType;
+import com.COLLABOMOD.collabomod.util.MagicSpellType; // 旧Enumは削除推奨だが、EntityMagicSequenceがまだ依存しているなら残す
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.LivingEntity;
@@ -15,6 +15,8 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 public class SpellAirBullet implements IMagicSpell {
@@ -61,9 +63,14 @@ public class SpellAirBullet implements IMagicSpell {
         Vec3 spawnPos = targetPos.add(Math.cos(angle) * dist, heightOffset + 2.0, Math.sin(angle) * dist);
 
         // 3. 魔法式の生成
-        // ここで「自分自身のタイプ」を渡すのがポイント
+        List<MagicComponentType> components = new ArrayList<>();
+        components.add(MagicComponentType.PROJECTILE_AIR);
+
+        // ビジュアルメタデータを取得
+        VisualMetadata visuals = MagicComponentType.PROJECTILE_AIR.visuals;
+
         EntityMagicSequence sequence = new EntityMagicSequence(
-                level, player, MagicSpellType.AIR_BULLET, spawnPos
+                level, player, components, visuals, 15, spawnPos
         );
 
         // 向きの計算 (ターゲットの方を向く)
