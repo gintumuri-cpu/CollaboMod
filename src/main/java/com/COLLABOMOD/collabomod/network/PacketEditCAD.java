@@ -3,6 +3,9 @@ package com.COLLABOMOD.collabomod.network;
 import com.COLLABOMOD.collabomod.block.entity.MagicConsoleBlockEntity;
 import com.COLLABOMOD.collabomod.gui.MagicConsoleMenu;
 import com.COLLABOMOD.collabomod.item.ICAD;
+import com.COLLABOMOD.collabomod.magic.MagicComponentType;
+import com.COLLABOMOD.collabomod.magic.SpellResolver;
+import com.COLLABOMOD.collabomod.magic.VisualMetadata;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
@@ -19,23 +22,23 @@ import java.util.List;
 import java.util.function.Supplier;
 
 public class PacketEditCAD {
-    private final List<String> components;
+    private final List<String> scriptLines;
 
-    public PacketEditCAD(List<String> components) {
-        this.components = components;
+    public PacketEditCAD(List<String> scriptLines) {
+        this.scriptLines = scriptLines;
     }
 
     public PacketEditCAD(FriendlyByteBuf buf) {
-        this.components = new ArrayList<>();
+        this.scriptLines = new ArrayList<>();
         int size = buf.readInt();
         for (int i = 0; i < size; i++) {
-            this.components.add(buf.readUtf());
+            this.scriptLines.add(buf.readUtf());
         }
     }
 
     public void toBytes(FriendlyByteBuf buf) {
-        buf.writeInt(components.size());
-        for (String s : components) {
+        buf.writeInt(scriptLines.size());
+        for (String s : scriptLines) {
             buf.writeUtf(s);
         }
     }
@@ -47,27 +50,31 @@ public class PacketEditCAD {
 
             if (player.containerMenu instanceof MagicConsoleMenu menu) {
                 MagicConsoleBlockEntity be = menu.blockEntity;
-
                 be.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY).ifPresent(handler -> {
-                    // スロット0 (CAD) を取得
                     ItemStack cadStack = handler.getStackInSlot(0);
 
                     if (!cadStack.isEmpty() && cadStack.getItem() instanceof ICAD) {
 
-                        // リストをNBTに変換
+                        // ■ 文字列リストをそのままNBT "ScriptCode" に保存
                         ListTag nbtList = new ListTag();
-                        for (String compName : components) {
-                            // "EMPTY" などのダミーは保存しない
-                            if (!compName.equals("NONE")) {
-                                nbtList.add(StringTag.valueOf(compName));
+                        for (String line : scriptLines) {
+                            if (!line.trim().isEmpty()) {
+                                nbtList.add(StringTag.valueOf(line));
                             }
                         }
 
-                        // 書き込み
                         CompoundTag tag = cadStack.getOrCreateTag();
-                        tag.put("Components", nbtList);
+                        tag.put("ScriptCode", nbtList);
 
-                        // 演出音（キーボードを叩いてエンターッ！という音）
+                        // ■ 重要: 変更を確定させる
+                        cadStack.setTag(tag); // 明示的にセット
+                        be.setChanged(); // ブロックエンティティに変更を通知
+
+                        // ■ 重要: サーバーからクライアントへスロットの更新を送信
+                        // これをやらないと、プレイヤーがGUIを開いたままでは変更が見えません
+                        player.containerMenu.broadcastChanges();
+
+                        // 効果音
                         player.level.playSound(null, player.getX(), player.getY(), player.getZ(),
                                 SoundEvents.UI_CARTOGRAPHY_TABLE_TAKE_RESULT, SoundSource.BLOCKS, 1.0F, 1.0F);
                         player.level.playSound(null, player.getX(), player.getY(), player.getZ(),

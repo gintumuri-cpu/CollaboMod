@@ -1,8 +1,8 @@
 package com.COLLABOMOD.collabomod.entity;
 
-import com.COLLABOMOD.collabomod.magic.MagicComponentType;// 新しいEnum
-import com.COLLABOMOD.collabomod.magic.SpellExecutor; // 追加
+import com.COLLABOMOD.collabomod.magic.MagicComponentType;
 import com.COLLABOMOD.collabomod.magic.SpellContext;
+import com.COLLABOMOD.collabomod.magic.SpellExecutor;
 import com.COLLABOMOD.collabomod.magic.VisualMetadata;
 import com.COLLABOMOD.collabomod.register.EntityRegister;
 import com.mojang.math.Vector3f;
@@ -26,16 +26,15 @@ import java.util.List;
 
 public class EntityMagicSequence extends Entity {
 
-    // ビジュアル同期用
+    // ■ 同期データ: 見た目ID, 色RGB, キャスターID, ターゲットID
     private static final EntityDataAccessor<String> VISUAL_ID = SynchedEntityData.defineId(EntityMagicSequence.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<Float> COLOR_R = SynchedEntityData.defineId(EntityMagicSequence.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> COLOR_G = SynchedEntityData.defineId(EntityMagicSequence.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> COLOR_B = SynchedEntityData.defineId(EntityMagicSequence.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Integer> CASTER_ID = SynchedEntityData.defineId(EntityMagicSequence.class, EntityDataSerializers.INT);
-
     private static final EntityDataAccessor<Integer> TARGET_ID = SynchedEntityData.defineId(EntityMagicSequence.class, EntityDataSerializers.INT);
 
-    // 実行するコンポーネントのリスト（サーバー側のみで保持すればOK）
+    // 実行用コンポーネントリスト
     private final List<MagicComponentType> components = new ArrayList<>();
     private int castTime = 20;
     private int age = 0;
@@ -45,17 +44,19 @@ public class EntityMagicSequence extends Entity {
         this.noCulling = true;
     }
 
-    // ■ コンストラクタ修正: リストを受け取る
+    // ■ 新しいコンストラクタ: ItemCADからリストを受け取る
     public EntityMagicSequence(Level level, LivingEntity caster, List<MagicComponentType> components, VisualMetadata meta, int castTime, Vec3 pos) {
         this(EntityRegister.MAGIC_SEQUENCE.get(), level);
         this.setPos(pos);
+
         this.components.addAll(components);
         this.castTime = castTime;
 
+        // ビジュアルデータの同期
         this.entityData.set(VISUAL_ID, meta.rendererID);
-        this.entityData.set(COLOR_R, meta.color.x());
-        this.entityData.set(COLOR_G, meta.color.y());
-        this.entityData.set(COLOR_B, meta.color.z());
+        this.entityData.set(COLOR_R, meta.mainColor.x());
+        this.entityData.set(COLOR_G, meta.mainColor.y());
+        this.entityData.set(COLOR_B, meta.mainColor.z());
         this.entityData.set(CASTER_ID, caster.getId());
 
         this.setXRot(caster.getXRot());
@@ -73,12 +74,9 @@ public class EntityMagicSequence extends Entity {
     }
 
     public void setTarget(LivingEntity target) {
-        if (target != null) {
-            this.entityData.set(TARGET_ID, target.getId());
-        }
+        if (target != null) this.entityData.set(TARGET_ID, target.getId());
     }
 
-    // クライアント用Getter
     public String getRendererID() { return this.entityData.get(VISUAL_ID); }
     public Vector3f getColor() { return new Vector3f(this.entityData.get(COLOR_R), this.entityData.get(COLOR_G), this.entityData.get(COLOR_B)); }
 
@@ -94,7 +92,7 @@ public class EntityMagicSequence extends Entity {
                 return;
             }
 
-            // キャスト完了
+            // キャスト完了時に実行
             if (this.age >= this.castTime) {
                 LivingEntity caster = (LivingEntity)casterEntity;
 
@@ -102,46 +100,24 @@ public class EntityMagicSequence extends Entity {
                 SpellContext ctx = new SpellContext(level, caster);
                 ctx.setLocation(this.position(), this.getXRot(), this.getYRot());
 
-                // ■ 追加: ターゲット情報の復元
+                // ターゲット復元
                 int targetId = this.entityData.get(TARGET_ID);
                 if (targetId != -1) {
                     Entity t = level.getEntity(targetId);
-                    if (t instanceof LivingEntity livingTarget) {
-                        ctx.target = livingTarget;
-                    }
+                    if (t instanceof LivingEntity livingTarget) ctx.target = livingTarget;
                 }
 
-                // コンポーネント適用 & 実行
+                // ■ コンポーネント適用
                 for (MagicComponentType comp : components) {
                     comp.apply(ctx);
                 }
+
+                // ■ 実行
                 SpellExecutor.execute(ctx);
 
                 this.discard();
             }
         }
-    }
-
-    // ■ NBT保存・読み込み（リスト対応）
-    @Override
-    protected void addAdditionalSaveData(CompoundTag tag) {
-        tag.putInt("Age", this.age);
-        tag.putInt("CastTime", this.castTime);
-
-        // コンポーネントリストを保存
-        ListTag list = new ListTag();
-        for (MagicComponentType comp : components) {
-            list.add(StringTag.valueOf(comp.name()));
-        }
-        tag.put("Components", list);
-
-        // ビジュアルデータも保存（同期用）
-        tag.putString("VisID", getRendererID());
-        tag.putFloat("CR", this.entityData.get(COLOR_R));
-        tag.putFloat("CG", this.entityData.get(COLOR_G));
-        tag.putFloat("CB", this.entityData.get(COLOR_B));
-        tag.putInt("Caster", this.entityData.get(CASTER_ID));
-        tag.putInt("TargetID", this.entityData.get(TARGET_ID));
     }
 
     @Override
@@ -163,6 +139,27 @@ public class EntityMagicSequence extends Entity {
         this.entityData.set(COLOR_G, tag.getFloat("CG"));
         this.entityData.set(COLOR_B, tag.getFloat("CB"));
         this.entityData.set(CASTER_ID, tag.getInt("Caster"));
+        this.entityData.set(TARGET_ID, tag.getInt("TargetID"));
+    }
+
+    @Override
+    protected void addAdditionalSaveData(CompoundTag tag) {
+        tag.putInt("Age", this.age);
+        tag.putInt("CastTime", this.castTime);
+
+        // リスト保存
+        ListTag list = new ListTag();
+        for (MagicComponentType comp : components) {
+            list.add(StringTag.valueOf(comp.name()));
+        }
+        tag.put("Components", list);
+
+        tag.putString("VisID", getRendererID());
+        tag.putFloat("CR", this.entityData.get(COLOR_R));
+        tag.putFloat("CG", this.entityData.get(COLOR_G));
+        tag.putFloat("CB", this.entityData.get(COLOR_B));
+        tag.putInt("Caster", this.entityData.get(CASTER_ID));
+        tag.putInt("TargetID", this.entityData.get(TARGET_ID));
     }
 
     @Override

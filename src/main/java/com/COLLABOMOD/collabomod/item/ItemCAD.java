@@ -4,11 +4,10 @@ import com.COLLABOMOD.collabomod.capability.MagicStatsProvider;
 import com.COLLABOMOD.collabomod.entity.EntityMagicSequence;
 import com.COLLABOMOD.collabomod.magic.*;
 import com.COLLABOMOD.collabomod.main.CollaboMod;
-import net.minecraft.nbt.ListTag; // 追加
-import net.minecraft.nbt.StringTag; // 追加
-import net.minecraft.nbt.Tag; // 追加
-import java.util.ArrayList; // 追加
-import com.COLLABOMOD.collabomod.util.MagicSpellType; // 旧Enum(EntityMagicSequence互換のため一時使用)
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
+import java.util.ArrayList;
 import com.COLLABOMOD.collabomod.util.PsionParticleUtil;
 import net.minecraft.Util;
 import net.minecraft.nbt.CompoundTag;
@@ -31,6 +30,7 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
@@ -45,22 +45,18 @@ public class ItemCAD extends Item implements ICAD{
     // ツールチップ
     @Override
     public void appendHoverText(ItemStack stack, @Nullable Level level, List<net.minecraft.network.chat.Component> tooltip, TooltipFlag flag) {
-        // メソッド名を修正 (getInstalledComponents)
-        List<MagicComponentType> components = getInstalledComponents(stack);
+        // NBTからスクリプト(文字列リスト)を読み込む
+        List<String> script = getScriptFromNBT(stack);
 
-        if (!components.isEmpty()) {
-            // 先頭の魔法名を表示
-            String mainName = components.get(0).name();
-            // 複数ある場合は「+他」と表示
-            if (components.size() > 1) {
-                tooltip.add(new TextComponent("インストール: " + mainName + " (他 " + (components.size() - 1) + " 個)"));
-            } else {
-                tooltip.add(new TextComponent("インストール: " + mainName));
+        if (!script.isEmpty()) {
+            // 最初の行を表示
+            tooltip.add(new TextComponent("§b[Code] " + script.get(0)));
+            if (script.size() > 1) {
+                tooltip.add(new TextComponent("§7...他 " + (script.size() - 1) + " 行"));
             }
         } else {
-            tooltip.add(new TextComponent("インストール: なし"));
+            tooltip.add(new TextComponent("§7[未設定] 起動式が書き込まれていません"));
         }
-
         super.appendHoverText(stack, level, tooltip, flag);
     }
 
@@ -71,21 +67,11 @@ public class ItemCAD extends Item implements ICAD{
 
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
-        ItemStack stack = player.getItemInHand(hand);
-
-        // ■ インストール切替 (Shift + 右クリック)
-        // 仮機能：コンポーネントを切り替えてNBTに保存する
-        if (player.isCrouching()) {
-            if (!level.isClientSide) {
-                cycleComponent(stack, player);
-            }
-            return InteractionResultHolder.success(stack);
-        }
-
         player.startUsingItem(hand);
+        // 起動音
         level.playSound(null, player.getX(), player.getY(), player.getZ(),
                 SoundEvents.BEACON_ACTIVATE, SoundSource.PLAYERS, 1.0F, 1.0F);
-        return InteractionResultHolder.consume(stack);
+        return InteractionResultHolder.consume(player.getItemInHand(hand));
     }
 
     @Override
@@ -101,65 +87,62 @@ public class ItemCAD extends Item implements ICAD{
     private void castMagic(Level level, Player player, ItemStack stack) {
         player.getCapability(MagicStatsProvider.PLAYER_MAGIC_STATS).ifPresent(cadStats -> {
 
-            // ■ NBTからコンポーネントリストを取得
-            List<MagicComponentType> components = getInstalledComponents(stack);
-            if (components.isEmpty()) return;
+            // 1. NBTからスクリプトを取得
+            List<String> script = getScriptFromNBT(stack);
+            if (script.isEmpty()) return; // 空なら何もしない
 
-            // リゾルバーを使ってコストなどを計算
-            int cost = SpellResolver.calculateTotalCost(components);
-            VisualMetadata visuals = SpellResolver.resolveVisuals(components);
-            int castTime = SpellResolver.calculateCastTime(components);
+            // 2. シミュレーションでコストを事前計算
+            // ※SpellResolverではなく、ScriptEngineのsimulateを使います
+            SpellContext simCtx = MagicScriptEngine.simulate(script);
+            int cost = simCtx.cost;
 
+            // --- サーバー側の処理 ---
             if (!level.isClientSide) {
+                // ストレスチェック
                 int stress = cadStats.getMentalLoad();
                 if (stress > 70 && level.getRandom().nextInt(100) < (stress - 70) * 2) {
                     handleFizzle(level, player);
                     return;
                 }
 
+                // コストチェック＆消費
                 if (cadStats.getCurrentPsion() >= cost) {
                     cadStats.setCurrentPsion(cadStats.getCurrentPsion() - cost);
                     cadStats.addMentalLoad(2);
-                    boolean isInstant = (castTime <= 0);
 
-                    if (isInstant) {
-                        // ■ 即時実行 (グラムなど)
-                        SpellContext ctx = new SpellContext(level, player);
-                        // コンポーネント適用
-                        for (MagicComponentType comp : components) {
-                            comp.apply(ctx);
-                        }
-                        SpellExecutor.execute(ctx);
+                    // 実行用コンテキストの作成
+                    SpellContext ctx = new SpellContext(level, player);
 
-                    } else {
-                        // ■ 魔法陣展開 (エア・バレットなど)
-                        Vec3 targetPos = getTargetPosition(level, player, 30.0D);
-                        Vec3 spawnPos = getRandomSpawnPos(targetPos);
+                    // ターゲット情報の取得（ロックオン）
+                    EntityHitResult hitResult = getTargetEntityResult(level, player, 30.0D);
+                    if (hitResult != null && hitResult.getEntity() instanceof LivingEntity target) {
+                        ctx.target = target;
+                    }
 
-                        EntityMagicSequence sequence = new EntityMagicSequence(
-                                level, player, components, visuals, castTime, spawnPos
-                        );
+                    // ■ スクリプトの実行
+                    try {
+                        MagicScriptEngine.execute(ctx, script);
 
-                        lookAt(sequence, targetPos);
-                        EntityHitResult entityResult = ProjectileUtil.getEntityHitResult(
-                                level, player, player.getEyePosition(),
-                                player.getEyePosition().add(player.getLookAngle().scale(30.0)),
-                                player.getBoundingBox().expandTowards(player.getLookAngle().scale(30.0)).inflate(1.0),
-                                (e) -> !e.isSpectator() && e.isPickable()
-                        );
+                        // 成功時の基本演出
+                        // (個別の発射音などはScriptEngine内のコマンド処理で鳴ります)
 
-                        if (entityResult != null && entityResult.getEntity() instanceof LivingEntity livingTarget) {
-                            sequence.setTarget(livingTarget);
-                        }
+                    } catch (MagicScriptEngine.ScriptExecutionException e) {
+                        // ランタイムエラー（実行時例外）の処理
+                        handleFizzle(level, player);
+                        player.sendMessage(new TextComponent("§c起動式エラー [行 " + e.line + "]: " + e.getMessage()), Util.NIL_UUID);
+                    }
 
-                        level.addFreshEntity(sequence);
-
+                } else {
+                    // MP不足
+                    if (player.tickCount % 20 == 0) {
                         level.playSound(null, player.getX(), player.getY(), player.getZ(),
-                                SoundEvents.UI_BUTTON_CLICK, SoundSource.PLAYERS, 1.0F, 2.0F);
+                                SoundEvents.DISPENSER_FAIL, SoundSource.PLAYERS, 0.5F, 1.0F);
+                        player.sendMessage(new TextComponent("想子不足 (必要: " + cost + ")"), Util.NIL_UUID);
                     }
                 }
             }
 
+            // --- クライアント側の処理（手元の演出） ---
             if (level.isClientSide) {
                 if (cadStats.getCurrentPsion() >= cost) {
                     Vec3 look = player.getLookAngle();
@@ -171,6 +154,20 @@ public class ItemCAD extends Item implements ICAD{
     }
 
     // --- Helper Methods ---
+
+    // NBTから文字列リストを取得
+    private List<String> getScriptFromNBT(ItemStack stack) {
+        List<String> script = new ArrayList<>();
+        CompoundTag tag = stack.getOrCreateTag();
+
+        if (tag.contains("ScriptCode", Tag.TAG_LIST)) {
+            ListTag listTag = tag.getList("ScriptCode", Tag.TAG_STRING);
+            for (int i = 0; i < listTag.size(); i++) {
+                script.add(listTag.getString(i));
+            }
+        }
+        return script;
+    }
 
     private List<MagicComponentType> getInstalledComponents(ItemStack stack) {
         List<MagicComponentType> list = new ArrayList<>();
@@ -190,46 +187,17 @@ public class ItemCAD extends Item implements ICAD{
         return list;
     }
 
-    // コンポーネントの切り替え（インストール）
-    private void cycleComponent(ItemStack stack, Player player) {
-        List<MagicComponentType> current = getInstalledComponents(stack);
-        ListTag newList = new ListTag();
-        String msg = "";
-
-        // ロジック: エア・バレット単体なら -> 複合（エア＋グラム）にする
-        // それ以外なら -> エア・バレット単体に戻す
-//        if (current.size() == 1 && current.get(0) == MagicComponentType.PROJECTILE_AIR) {
-//            newList.add(StringTag.valueOf(MagicComponentType.PROJECTILE_AIR.name()));
-//            newList.add(StringTag.valueOf(MagicComponentType.PROJECTILE_GRAM.name()));
-//            msg = "§5[複合] エア・バレット + グラム";
-//        } else {
-//            newList.add(StringTag.valueOf(MagicComponentType.PROJECTILE_AIR.name()));
-//            msg = "§b[単体] エア・バレット";
-//        }
-//        if (current.size() == 1 && current.get(0) == MagicComponentType.PROJECTILE_AIR) {
-//            // ■ 実験: エア・バレット と マテリアル・バースト を合成
-//            newList.add(StringTag.valueOf(MagicComponentType.PROJECTILE_AIR.name()));
-//            newList.add(StringTag.valueOf(MagicComponentType.MATERIAL_BURST.name()));
-//            msg = "§5[実験] エア・バレット + 戦略級";
-//        } else {
-//            newList.add(StringTag.valueOf(MagicComponentType.PROJECTILE_AIR.name()));
-//            msg = "§b[単体] エア・バレット";
-//        }
-
-        stack.getOrCreateTag().put("Components", newList);
-
-        player.level.playSound(null, player.getX(), player.getY(), player.getZ(),
-                SoundEvents.COMPARATOR_CLICK, SoundSource.PLAYERS, 1.0F, 1.5F);
-        player.displayClientMessage(new TextComponent("インストール: " + msg), true);
-    }
-
-    private Vec3 getTargetPosition(Level level, Player player, double range) {
+    private EntityHitResult getTargetEntityResult(Level level, Player player, double range) {
         Vec3 eyePos = player.getEyePosition();
         Vec3 look = player.getLookAngle();
         Vec3 endPos = eyePos.add(look.scale(range));
         AABB searchBox = player.getBoundingBox().expandTowards(look.scale(range)).inflate(1.0D);
-        EntityHitResult entityResult = ProjectileUtil.getEntityHitResult(
+        return ProjectileUtil.getEntityHitResult(
                 level, player, eyePos, endPos, searchBox, (e) -> !e.isSpectator() && e.isPickable());
+    }
+
+    private Vec3 getTargetPosition(Level level, Player player, double range) {
+        EntityHitResult entityResult = getTargetEntityResult(level, player, range);
         if (entityResult != null) {
             LivingEntity target = (LivingEntity) entityResult.getEntity();
             return target.position().add(0, target.getBbHeight() / 2.0, 0);

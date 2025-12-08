@@ -1,51 +1,50 @@
 package com.COLLABOMOD.collabomod.magic;
 
-import com.mojang.math.Vector3f;
+import com.COLLABOMOD.collabomod.science.ScienceEngine; // 科学エンジンを使用
 import java.util.List;
 
 public class SpellResolver {
 
-    // 複数のコンポーネントから「最終的な見た目」を決定する
+    // 見た目の解決
     public static VisualMetadata resolveVisuals(List<MagicComponentType> components) {
-        VisualMetadata finalMeta = new VisualMetadata();
+        // 1. ダミー設計図を作成
+        SpellContext ctx = new SpellContext();
+
+        // 2. 適用
         for (MagicComponentType comp : components) {
-            finalMeta.merge(comp.visuals);
+            comp.apply(ctx);
         }
-        return finalMeta;
+
+        // 3. 科学エンジンで見た目を自動生成 (パラメータから色などを決定)
+        ScienceEngine.simulateVisuals(ctx.science);
+
+        // 4. 強制的な見た目指定（Material Burstなど）があればマージ
+        for (MagicComponentType comp : components) {
+            ctx.science.visuals.merge(comp.visuals);
+        }
+
+        return ctx.science.visuals;
     }
 
-    // 合計コストの計算
+    // ■ 修正: コスト計算をシミュレーションベースに変更
     public static int calculateTotalCost(List<MagicComponentType> components) {
-        int cost = 0;
+        // ダミー設計図を作成
+        SpellContext ctx = new SpellContext();
+
+        // 全コンポーネントを適用
         for (MagicComponentType comp : components) {
-            cost += comp.cost;
+            comp.apply(ctx); // これにより ctx.cost が加算・乗算される
         }
-        return cost;
+
+        return ctx.cost;
     }
 
-    // ■ 修正: 新しいコンポーネントに対応した時間計算
+    // キャスト時間の計算
     public static int calculateCastTime(List<MagicComponentType> components) {
-        int maxTime = 20; // 基本キャストタイム (1秒)
-
+        SpellContext ctx = new SpellContext();
         for (MagicComponentType comp : components) {
-
-            // 1. 戦略級モジュールがある場合 -> 詠唱時間を長くする
-            if (comp == MagicComponentType.MOD_STRATEGIC) {
-                maxTime = Math.max(maxTime, 100); // 5秒
-            }
-
-            // 2. 分解属性がある場合（グラム） -> 即時発動にする
-            // グラムは「魔法式を展開せずに発射する」魔法なので 0 にする
-            else if (comp == MagicComponentType.ATTRIB_DECOMPOSITION) {
-                return 0; // 強制的に即時発動
-            }
-
-            // その他: 必要なら他のコンポーネントでも時間を調整
-            // 例: ACT_RESTORE (回復) は少し長い、など
-            else if (comp == MagicComponentType.ACT_RESTORE) {
-                maxTime = Math.max(maxTime, 40);
-            }
+            comp.apply(ctx); // これにより ctx.castTime が加算される
         }
-        return maxTime;
+        return ctx.castTime;
     }
 }

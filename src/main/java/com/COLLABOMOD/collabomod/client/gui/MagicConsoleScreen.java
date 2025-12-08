@@ -2,11 +2,15 @@ package com.COLLABOMOD.collabomod.client.gui;
 
 import com.COLLABOMOD.collabomod.gui.MagicConsoleMenu;
 import com.COLLABOMOD.collabomod.magic.MagicComponentType;
+import com.COLLABOMOD.collabomod.magic.MagicScriptEngine;
+import com.COLLABOMOD.collabomod.magic.SpellContext;
 import com.COLLABOMOD.collabomod.network.NetworkHandler;
 import com.COLLABOMOD.collabomod.network.PacketEditCAD;
+import com.COLLABOMOD.collabomod.magic.SpellResolver;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.network.chat.Component;
@@ -15,108 +19,169 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class MagicConsoleScreen extends AbstractContainerScreen<MagicConsoleMenu> {
 
     private static final ResourceLocation TEXTURE = new ResourceLocation("minecraft", "textures/gui/container/dispenser.png");
 
-    // 現在選択されているコンポーネントのリスト（画面表示用）
-    // 初期値はすべて "NONE"
-    private final MagicComponentType[] selectedComponents = new MagicComponentType[5];
+    // パレットのコマンドリスト
+    private static final String[] PALETTE_COMMANDS = {
+            "IF (...) {",
+            "REPEAT (3) {",
+            "}",
+            "Cast()",
+            "Action.", "Attr.", "Mod." // 入力支援用プレフィックス
+    };
+
+    private final List<EditBox> codeInputs = new ArrayList<>();
+    private int activeLineIndex = 0;
 
     public MagicConsoleScreen(MagicConsoleMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title);
+        this.imageWidth = 320;
+        this.imageHeight = 220;
+        this.inventoryLabelY = 1000;
+        this.titleLabelY = 1000;
     }
 
     @Override
     protected void init() {
         super.init();
+        int x = (this.width - this.imageWidth) / 2;
+        int y = (this.height - this.imageHeight) / 2;
 
-        // 初期化
-        for(int i=0; i<5; i++) selectedComponents[i] = null; // null = NONE
-
-        // ■ プログラム行ボタンの配置 (5行)
-        // x: GUI左端 + 60, y: 上から 20, 40, 60...
-        for (int i = 0; i < 5; i++) {
-            final int index = i;
-            this.addRenderableWidget(new Button(this.leftPos + 60, this.topPos + 18 + (i * 22), 100, 20, new TextComponent("---"), button -> {
-                // ボタンを押すとコンポーネントを切り替える
-                cycleComponent(index);
-                updateButtonText(button, index);
+        // ■ 1. 左側：構文パレットのみ配置
+        // カテゴリボタン等は削除しました
+        int palX = x + 10;
+        int palY = y + 20;
+        for (String cmd : PALETTE_COMMANDS) {
+            this.addRenderableWidget(new Button(palX, palY, 80, 16, new TextComponent(cmd), button -> {
+                insertText(cmd);
             }));
+            palY += 18;
         }
 
-        // ■ 書き込みボタン
-        this.addRenderableWidget(new Button(this.leftPos + 70, this.topPos + 130, 80, 20, new TextComponent("INSTALL"), button -> {
-            // 現在の構成をリスト化してサーバーへ送信
-            List<String> list = new ArrayList<>();
-            for (MagicComponentType comp : selectedComponents) {
-                if (comp != null) {
-                    list.add(comp.name());
-                }
+        // ■ 2. 中央：エディタエリア (EditBox)
+        if (codeInputs.isEmpty()) {
+            for (int i = 0; i < 10; i++) {
+                EditBox box = new EditBox(this.font, 0, 0, 140, 12, new TextComponent(""));
+                box.setMaxLength(200);
+                box.setBordered(false);
+                box.setTextColor(0xFFFFFF);
+                int finalI = i;
+                box.setResponder((text) -> this.activeLineIndex = finalI);
+                codeInputs.add(box);
             }
-            NetworkHandler.INSTANCE.sendToServer(new PacketEditCAD(list));
+        }
+        for (int i = 0; i < codeInputs.size(); i++) {
+            EditBox box = codeInputs.get(i);
+            box.x = x + 100;
+            box.y = y + 20 + (i * 14);
+            this.addRenderableWidget(box);
+        }
+
+        // ■ 3. 右下：インストールボタン
+        // x=215, y=113 (CADスロットの右隣)
+        this.addRenderableWidget(new Button(x + 215, y + 113, 60, 20, new TextComponent("INSTALL"), button -> {
+            List<String> code = codeInputs.stream().map(EditBox::getValue).collect(Collectors.toList());
+            NetworkHandler.INSTANCE.sendToServer(new PacketEditCAD(code));
         }));
     }
 
-    // コンポーネントを順番に切り替えるロジック
-    private void cycleComponent(int index) {
-        MagicComponentType current = selectedComponents[index];
-        MagicComponentType[] allTypes = MagicComponentType.values();
-
-        if (current == null) {
-            // 最初はリストの先頭へ
-            selectedComponents[index] = allTypes[0];
-        } else {
-            // 次の要素へ
-            int nextOrdinal = current.ordinal() + 1;
-            if (nextOrdinal >= allTypes.length) {
-                selectedComponents[index] = null; // 一周したら無しに戻す
-            } else {
-                selectedComponents[index] = allTypes[nextOrdinal];
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        // 1. 各エディタボックスのキー処理を優先
+        for (EditBox box : codeInputs) {
+            if (box.keyPressed(keyCode, scanCode, modifiers)) {
+                return true;
             }
         }
+
+        // 2. インベントリキー（Eなど）が押された場合
+        if (this.minecraft.options.keyInventory.matches(keyCode, scanCode)) {
+            // エディタのどれかがフォーカスされていたら、画面を閉じずにイベントを消費する（文字入力とみなす）
+            for (EditBox box : codeInputs) {
+                if (box.isFocused()) {
+                    return true;
+                }
+            }
+        }
+
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
-    // ボタンの文字を更新
-    private void updateButtonText(Button button, int index) {
-        MagicComponentType comp = selectedComponents[index];
-        if (comp == null) {
-            button.setMessage(new TextComponent("---"));
-        } else {
-            // 分かりやすい名前に変換して表示
-            String name = comp.name();
-            // 例: PROJECTILE_AIR -> Air Projectile
-            if (name.startsWith("ACT_")) button.setMessage(new TextComponent("§c[Act] " + name.substring(4)));
-            else if (name.startsWith("ATTRIB_")) button.setMessage(new TextComponent("§b[Attr] " + name.substring(7)));
-            else if (name.startsWith("MOD_")) button.setMessage(new TextComponent("§e[Mod] " + name.substring(4)));
-            else button.setMessage(new TextComponent(name));
+    private void insertText(String text) {
+        if (activeLineIndex < codeInputs.size()) {
+            EditBox box = codeInputs.get(activeLineIndex);
+            String current = box.getValue();
+            if (current.isEmpty()) box.setValue(text);
+            else box.setValue(current + " " + text);
+
+            box.setFocus(true);
+            // 他のフォーカスを外す
+            for (int i = 0; i < codeInputs.size(); i++) {
+                if (i != activeLineIndex) codeInputs.get(i).setFocus(false);
+            }
         }
     }
 
     @Override
     public void render(PoseStack poseStack, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(poseStack);
-        super.render(poseStack, mouseX, mouseY, partialTick);
-        this.renderTooltip(poseStack, mouseX, mouseY);
 
-        // ラベル描画
-        this.font.draw(poseStack, "Magic Sequence:", this.leftPos + 60, this.topPos + 8, 0x404040);
-        this.font.draw(poseStack, "CAD", this.leftPos + 26, this.topPos + 20, 0x404040);
+        int x = (this.width - this.imageWidth) / 2;
+        int y = (this.height - this.imageHeight) / 2;
+        fill(poseStack, x, y, x + this.imageWidth, y + this.imageHeight, 0xFF202020);
+
+        vLine(poseStack, x + 95, y + 10, y + 210, 0xFF555555);
+        vLine(poseStack, x + 245, y + 10, y + 210, 0xFF555555);
+
+        super.render(poseStack, mouseX, mouseY, partialTick);
+
+        renderMonitor(poseStack, x + 250, y + 20);
+
+        this.font.draw(poseStack, "Palette", x + 10, y + 8, 0xFFAAAAAA);
+        this.font.draw(poseStack, "Magic Code Editor", x + 100, y + 8, 0xFFFFFFFF);
+        this.font.draw(poseStack, "Monitor", x + 250, y + 8, 0xFF55FFFF);
+
+        // 行番号
+        for(int i=0; i<10; i++) {
+            this.font.draw(poseStack, String.valueOf(i+1), x + 100 - 12, y + 20 + (i * 14) + 2, 0xFF888888);
+        }
+
+        // アクティブ行ハイライト
+        int editY = y + 20 + (activeLineIndex * 14);
+        fill(poseStack, x + 98, editY, x + 100, editY + 12, 0xFFFFFF00);
+
+        this.renderTooltip(poseStack, mouseX, mouseY);
     }
 
+    // 背景描画（スロット枠）
     @Override
     protected void renderBg(PoseStack poseStack, float partialTick, int mouseX, int mouseY) {
+        int x = (this.width - this.imageWidth) / 2;
+        int y = (this.height - this.imageHeight) / 2;
+
         RenderSystem.setShader(GameRenderer::getPositionTexShader);
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
         RenderSystem.setShaderTexture(0, TEXTURE);
 
-        int x = (this.width - this.imageWidth) / 2;
-        int y = (this.height - this.imageHeight) / 2;
-        this.blit(poseStack, x, y, 0, 0, this.imageWidth, this.imageHeight);
+        // ■ 修正: CADスロット枠の描画位置変更 (189, 112)
+        // Menu側の (190, 113) に合わせて調整
+        this.blit(poseStack, x + 189, y + 112, 79, 16, 18, 18);
 
-        // CADスロット枠（左側）
-        this.blit(poseStack, x + 25, y + 34, 79, 16, 18, 18);
+        this.font.draw(poseStack, "CAD", x + 190, y + 102, 0xFFAAAAAA);
+    }
+
+    private void renderMonitor(PoseStack poseStack, int x, int y) {
+        // ... (モニター表示は変更なし)
+        // 必要ならここに「Syntax Error」などの簡易表示を追加できます
+        List<String> code = codeInputs.stream().map(EditBox::getValue).collect(Collectors.toList());
+        SpellContext result = MagicScriptEngine.simulate(code);
+        this.font.draw(poseStack, "Cost: " + result.cost, x, y, 0xFF55FFFF);
+        this.font.draw(poseStack, "Pwr: " + result.science.energy, x, y + 12, 0xFFFFAA00);
     }
 }

@@ -25,53 +25,39 @@ public class MagicConsoleMenu extends AbstractContainerMenu {
     public final MagicConsoleBlockEntity blockEntity;
     private final ContainerLevelAccess access;
 
-    // クライアント側コンストラクタ
     public MagicConsoleMenu(int id, Inventory inv, FriendlyByteBuf extraData) {
         this(id, inv, inv.player.level.getBlockEntity(extraData.readBlockPos()));
     }
 
-    // サーバー側コンストラクタ
     public MagicConsoleMenu(int id, Inventory inv, BlockEntity entity) {
         super(MenuTypeRegister.MAGIC_CONSOLE_MENU.get(), id);
         this.blockEntity = (MagicConsoleBlockEntity) entity;
         this.access = ContainerLevelAccess.create(inv.player.level, entity.getBlockPos());
 
         this.blockEntity.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY).ifPresent(handler -> {
-            // ■ Slot 0: CAD配置スロット (左側)
-            this.addSlot(new SlotItemHandler(handler, 0, 20, 35) {
+
+            // ■ 修正: CADスロットを右側（モニターの下、INSTALLボタンの横）に移動
+            // x=190, y=113 (ボタンの左隣あたり)
+            this.addSlot(new SlotItemHandler(handler, 0, 190, 113) {
                 @Override
                 public boolean mayPlace(@NotNull ItemStack stack) {
                     return stack.getItem() instanceof ICAD;
                 }
             });
-
-            // ■ Slot 1-3: コンポーネントスロット (中央～右)
-            for (int i = 0; i < 5; i++) {
-                this.addSlot(new SlotItemHandler(handler, 1 + i, 60 + (i * 18), 35) {
-                    @Override
-                    public boolean mayPlace(@NotNull ItemStack stack) {
-                        return stack.getItem() instanceof ICAD;
-                    }
-                });
-            }
         });
 
-        addPlayerInventory(inv);
-        addPlayerHotbar(inv);
+        layoutPlayerInventory(inv, 48, 140);
     }
 
-    // プレイヤーインベントリの配置 (Y座標などはバニラ標準)
-    private void addPlayerInventory(Inventory playerInventory) {
+    // ... (layoutPlayerInventory, stillValid, quickMoveStack は変更なし) ...
+    private void layoutPlayerInventory(Inventory playerInventory, int leftCol, int topRow) {
         for (int i = 0; i < 3; ++i) {
             for (int l = 0; l < 9; ++l) {
-                this.addSlot(new Slot(playerInventory, l + i * 9 + 9, 8 + l * 18, 84 + i * 18));
+                this.addSlot(new Slot(playerInventory, l + i * 9 + 9, leftCol + l * 18, topRow + i * 18));
             }
         }
-    }
-
-    private void addPlayerHotbar(Inventory playerInventory) {
         for (int i = 0; i < 9; ++i) {
-            this.addSlot(new Slot(playerInventory, i, 8 + i * 18, 142));
+            this.addSlot(new Slot(playerInventory, i, leftCol + i * 18, topRow + 58));
         }
     }
 
@@ -80,9 +66,8 @@ public class MagicConsoleMenu extends AbstractContainerMenu {
         return stillValid(this.access, player, BlockRegister.MAGIC_CONSOLE.get());
     }
 
-    // Shiftクリック時の挙動（簡易実装）
     @Override
     public ItemStack quickMoveStack(Player player, int index) {
-        return ItemStack.EMPTY; // 一旦無効化（実装すると長くなるため）
+        return ItemStack.EMPTY;
     }
 }

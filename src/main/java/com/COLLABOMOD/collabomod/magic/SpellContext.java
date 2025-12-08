@@ -1,62 +1,50 @@
 package com.COLLABOMOD.collabomod.magic;
 
+import com.COLLABOMOD.collabomod.science.ScienceContext;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 public class SpellContext {
-    // ■ 基本パラメータ (部品によって加算・乗算される)
-    public float power = 1.0F;       // 威力
-    public float range = 10.0F;      // 射程・範囲
-    public float speed = 1.0F;       // 弾速・発動速度
-    public int cost = 0;             // 消費サイオン
-    public int castTime = 0;         // 詠唱時間 (tick)
+    public final ScienceContext science = new ScienceContext();
 
-    // ■ 魔法の分類フラグ
-    public EnumAction action = EnumAction.NONE;          // 作用 (撃つ、爆発、治す...)
-    public EnumAttribute attribute = EnumAttribute.NONE; // 属性 (空気、振動、分解...)
+    public int cost = 0;
+    public int castTime = 0;
+    public EnumAction action = EnumAction.NONE;
+    public EnumAttribute attribute = EnumAttribute.NONE;
 
-    // ■ 実行時の環境情報
     public Level level;
     public LivingEntity caster;
-    public Vec3 origin;    // 発動地点
-    public Vec3 direction; // 向いている方向
-    public float rotX;     // Pitch
-    public float rotY;     // Yaw
+    public Vec3 origin = Vec3.ZERO;
+    public Vec3 direction = Vec3.ZERO;
+    public float rotX = 0;
+    public float rotY = 0;
+    public LivingEntity target;
 
-    public LivingEntity target = null;
+    public float power = 1.0F;
+    public float range = 10.0F;
+    public float speed = 1.0F;
 
-    // コンストラクタ
     public SpellContext(Level level, LivingEntity caster) {
         this.level = level;
         this.caster = caster;
-        this.origin = caster.position();
-        this.direction = caster.getLookAngle();
-        this.rotX = caster.getXRot();
-        this.rotY = caster.getYRot();
+        if (caster != null) {
+            this.origin = caster.position();
+            this.direction = caster.getLookAngle();
+            this.rotX = caster.getXRot();
+            this.rotY = caster.getYRot();
+        }
     }
 
-    // 座標などの強制上書き用（遠隔発動などで使う）
+    // シミュレーション用ダミー
+    public SpellContext() {}
+
     public void setLocation(Vec3 pos, float pitch, float yaw) {
         this.origin = pos;
         this.rotX = pitch;
         this.rotY = yaw;
-        // directionも更新した方が良いが、今回は簡易的にそのまま
     }
 
-    // --- 定義用Enum ---
-    public enum EnumAction {
-        NONE,
-        PROJECTILE, // 射出
-        EXPLOSION,  // 爆発
-        RESTORE     // 修復
-    }
-
-    public enum EnumAttribute {
-        NONE,
-        AIR,           // 空気
-        OSCILLATION,   // 振動
-        DECOMPOSITION, // 分解
-        MASS_ENERGY    // 質量エネルギー
-    }
+    public enum EnumAction { NONE, PROJECTILE, EXPLOSION, RESTORE }
+    public enum EnumAttribute { NONE, AIR, OSCILLATION, DECOMPOSITION, MASS_ENERGY }
 }

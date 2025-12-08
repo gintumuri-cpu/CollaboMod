@@ -26,23 +26,13 @@ public class SpellExecutor {
         // ■ 1. 射撃タイプ (PROJECTILE)
         if (ctx.action == SpellContext.EnumAction.PROJECTILE) {
 
-            // 発射ベクトル計算
             float f = 0.017453292F;
             double x = -Math.sin(ctx.rotY * f) * Math.cos(ctx.rotX * f);
             double y = -Math.sin(ctx.rotX * f);
             double z = Math.cos(ctx.rotY * f) * Math.cos(ctx.rotX * f);
 
-            // 属性による分岐
-            if (ctx.attribute == SpellContext.EnumAttribute.AIR) {
-                // エア・バレット
-                EntityAirBullet bullet = new EntityAirBullet(ctx.level, ctx.caster);
-                bullet.setPos(ctx.origin.x, ctx.origin.y, ctx.origin.z);
-                bullet.shoot(x, y, z, ctx.speed * 3.0F, 0.5F);
-                ctx.level.addFreshEntity(bullet);
-                ctx.level.playSound(null, ctx.origin.x, ctx.origin.y, ctx.origin.z, SoundEvents.PHANTOM_FLAP, SoundSource.PLAYERS, 2.0F, 1.5F);
-            }
-            else if (ctx.attribute == SpellContext.EnumAttribute.DECOMPOSITION) {
-                // グラム・デモリッション (ミスト弾)
+            // 空気属性 -> エア・バレット
+            if (ctx.science.compMatter > 0.5F) {
                 EntityGramDemolition bullet = new EntityGramDemolition(ctx.level, ctx.caster);
                 bullet.setPos(ctx.origin.x, ctx.origin.y, ctx.origin.z);
                 bullet.shoot(x, y, z, ctx.speed * 4.0F, 0.5F);
@@ -50,21 +40,24 @@ public class SpellExecutor {
                 ctx.level.addFreshEntity(bullet);
                 ctx.level.playSound(null, ctx.origin.x, ctx.origin.y, ctx.origin.z, SoundEvents.TRIDENT_THROW, SoundSource.PLAYERS, 1.0F, 0.5F);
             }
-            // 将来的に: else if (VIBRATION) -> フォノンメーザー
+            // それ以外（デフォルト） -> エア・バレット
+            else {
+                EntityAirBullet bullet = new EntityAirBullet(ctx.level, ctx.caster);
+                bullet.setPos(ctx.origin.x, ctx.origin.y, ctx.origin.z);
+                bullet.shoot(x, y, z, ctx.speed * 3.0F, 0.5F);
+                ctx.level.addFreshEntity(bullet);
+                ctx.level.playSound(null, ctx.origin.x, ctx.origin.y, ctx.origin.z, SoundEvents.PHANTOM_FLAP, SoundSource.PLAYERS, 2.0F, 1.5F);
+            }
         }
 
         // ■ 2. 爆発タイプ (EXPLOSION)
         else if (ctx.action == SpellContext.EnumAction.EXPLOSION) {
 
             if (ctx.attribute == SpellContext.EnumAttribute.MASS_ENERGY) {
-                // マテリアル・バースト
                 EntityMaterialBurst burst = new EntityMaterialBurst(ctx.level, ctx.origin.x, ctx.origin.y, ctx.origin.z);
-                // コンテキストの範囲を反映させたい場合、Entity側に setter を作ってここで呼び出す
-                // burst.setMaxRadius(ctx.range);
                 ctx.level.addFreshEntity(burst);
                 ctx.level.playSound(null, ctx.origin.x, ctx.origin.y, ctx.origin.z, SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.WEATHER, 100.0F, 0.5F);
             }
-            // ここに「振動爆発」などを追加可能
         }
 
         // ■ 3. 回復タイプ (RESTORE)
@@ -75,12 +68,17 @@ public class SpellExecutor {
 
     private static void executeRestore(SpellContext ctx) {
         if (ctx.target == null || !(ctx.level instanceof ServerLevel serverLevel)) return;
+
         IdeaDimensionData idea = IdeaDimensionData.get(serverLevel);
         EidosData backup = idea.getOptimalEntityState(ctx.target.getUUID());
+
         if (backup == null) return;
+
         float currentHP = ctx.target.getHealth();
         float oldHP = backup.getEntityData().contains("Health") ? backup.getEntityData().getFloat("Health") : ctx.target.getMaxHealth();
+
         if (currentHP >= oldHP) return;
+
         float damageDiff = oldHP - currentHP;
         CompoundTag oldData = backup.getEntityData();
         ListTag posList = new ListTag();
@@ -88,11 +86,16 @@ public class SpellExecutor {
         posList.add(net.minecraft.nbt.DoubleTag.valueOf(ctx.target.getY()));
         posList.add(net.minecraft.nbt.DoubleTag.valueOf(ctx.target.getZ()));
         oldData.put("Pos", posList);
+
         ctx.target.load(oldData);
         ctx.target.setPos(ctx.target.getX(), ctx.target.getY(), ctx.target.getZ());
         ctx.target.invulnerableTime = 20;
+
         idea.clearHistory(ctx.target.getUUID());
-        ctx.level.playSound(null, ctx.target.getX(), ctx.target.getY(), ctx.target.getZ(), SoundEvents.ZOMBIE_VILLAGER_CONVERTED, SoundSource.PLAYERS, 1.0F, 1.5F);
+
+        ctx.level.playSound(null, ctx.target.getX(), ctx.target.getY(), ctx.target.getZ(),
+                SoundEvents.ZOMBIE_VILLAGER_CONVERTED, SoundSource.PLAYERS, 1.0F, 1.5F);
+
         if (ctx.caster instanceof Player player) {
             player.getCapability(MagicStatsProvider.PLAYER_MAGIC_STATS).ifPresent(stats -> {
                 int pain = (int)(damageDiff * 2);
@@ -102,7 +105,7 @@ public class SpellExecutor {
                 player.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, duration, 0));
                 player.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, duration, 4));
                 player.addEffect(new MobEffectInstance(MobEffects.CONFUSION, duration, 0));
-                player.sendMessage(new TextComponent("§b再成完了 (復元量: " + (int)damageDiff + ")"), net.minecraft.Util.NIL_UUID);
+                player.sendMessage(new TextComponent("§b再成完了"), net.minecraft.Util.NIL_UUID);
             });
         }
     }
