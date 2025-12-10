@@ -3,7 +3,7 @@ package com.COLLABOMOD.collabomod.magic;
 import com.COLLABOMOD.collabomod.capability.MagicStatsProvider;
 import com.COLLABOMOD.collabomod.entity.EntityAirBullet;
 import com.COLLABOMOD.collabomod.entity.EntityGramDemolition;
-import com.COLLABOMOD.collabomod.entity.EntityMaterialBurst;
+import com.COLLABOMOD.collabomod.entity.EntitySciencePhenomenon;
 import com.COLLABOMOD.collabomod.world.idea.EidosData;
 import com.COLLABOMOD.collabomod.world.idea.IdeaDimensionData;
 import com.COLLABOMOD.collabomod.physics.PhysicsSystem;
@@ -58,7 +58,7 @@ public class SpellExecutor {
         else if (ctx.action == SpellContext.EnumAction.EXPLOSION) {
             // ■ 修正: 全ての爆発現象を EntityMaterialBurst (万能現象エンティティ) に任せる
             // これにより、ScienceEngineで計算された「色」や「形状」が反映され、物理エンジンも継続的に動作します
-            EntityMaterialBurst burst = new EntityMaterialBurst(ctx.level, ctx.origin, ctx.science, ctx.caster);
+            EntitySciencePhenomenon burst = new EntitySciencePhenomenon(ctx.level, ctx.origin, ctx.science, ctx.caster);
             ctx.level.addFreshEntity(burst);
 
             // 初動の音
@@ -78,7 +78,7 @@ public class SpellExecutor {
 
             // ■ 修正: 防御結界も EntityMaterialBurst で表現
             // compShield成分が含まれているため、ScienceEngineが自動的に「シールドドーム」として描画します
-            EntityMaterialBurst shield = new EntityMaterialBurst(ctx.level, pos, ctx.science, ctx.caster);
+            EntitySciencePhenomenon shield = new EntitySciencePhenomenon(ctx.level, pos, ctx.science, ctx.caster);
             ctx.level.addFreshEntity(shield);
 
             ctx.level.playSound(null, pos.x, pos.y, pos.z,

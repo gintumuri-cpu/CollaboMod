@@ -4,6 +4,7 @@ import com.COLLABOMOD.collabomod.client.util.GeometryHelper;
 import com.COLLABOMOD.collabomod.entity.EntityMagicSequence;
 import com.COLLABOMOD.collabomod.magic.EnumMagicShape;
 import com.COLLABOMOD.collabomod.magic.VisualMetadata;
+import com.COLLABOMOD.collabomod.entity.EntitySciencePhenomenon;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -16,7 +17,7 @@ import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
 
-public class RenderUniversalMagic extends EntityRenderer<EntityMagicSequence> {
+public class RenderUniversalMagic extends EntityRenderer<EntitySciencePhenomenon> {
 
     private static final ResourceLocation BEAM_TEXTURE = new ResourceLocation("textures/entity/beacon_beam.png");
 
@@ -25,17 +26,17 @@ public class RenderUniversalMagic extends EntityRenderer<EntityMagicSequence> {
     }
 
     @Override
-    public ResourceLocation getTextureLocation(EntityMagicSequence entity) {
+    public ResourceLocation getTextureLocation(EntitySciencePhenomenon entity) {
         return BEAM_TEXTURE;
     }
 
     @Override
-    public boolean shouldRender(EntityMagicSequence entity, net.minecraft.client.renderer.culling.Frustum frustum, double x, double y, double z) {
+    public boolean shouldRender(EntitySciencePhenomenon entity, net.minecraft.client.renderer.culling.Frustum frustum, double x, double y, double z) {
         return true; // 常に描画
     }
 
     @Override
-    public void render(EntityMagicSequence entity, float entityYaw, float partialTicks, PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
+    public void render(EntitySciencePhenomenon entity, float entityYaw, float partialTicks, PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
         super.render(entity, entityYaw, partialTicks, poseStack, buffer, packedLight);
 
         // ■ エンティティからパラメータを取得（※EntityMagicSequenceの更新が必要）

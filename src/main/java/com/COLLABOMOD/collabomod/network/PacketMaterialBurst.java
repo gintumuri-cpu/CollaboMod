@@ -1,7 +1,7 @@
 package com.COLLABOMOD.collabomod.network;
 
 import com.COLLABOMOD.collabomod.capability.MagicStatsProvider;
-import com.COLLABOMOD.collabomod.entity.EntityMaterialBurst;
+import com.COLLABOMOD.collabomod.entity.EntitySciencePhenomenon;
 import com.COLLABOMOD.collabomod.science.ScienceContext;
 import net.minecraft.Util;
 import net.minecraft.core.BlockPos;
@@ -51,7 +51,7 @@ public class PacketMaterialBurst {
                     ScienceContext burstCtx = ScienceContext.createStrategicClass();
 
                     // ■ 修正: 爆発ではなく、破壊エネルギー体を設置する
-                    EntityMaterialBurst burst = new EntityMaterialBurst(
+                    EntitySciencePhenomenon burst = new EntitySciencePhenomenon(
                             level,
                             Vec3.atCenterOf(targetPos), // BlockPos -> Vec3
                             burstCtx,

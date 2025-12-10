@@ -95,7 +95,7 @@ public class EntitySciencePhenomenon extends Entity {
     public float getRadius() { return this.entityData.get(CURRENT_RADIUS); }
     public float getEnergy() { return this.entityData.get(CURRENT_ENERGY); }
     public float getAlpha() { return this.entityData.get(CURRENT_ALPHA); }
-    public PhenomenonType getType() { return PhenomenonType.values()[this.entityData.get(PHENOMENON_TYPE)]; }
+    public PhenomenonType getPhenomenonType() {return PhenomenonType.values()[this.entityData.get(PHENOMENON_TYPE)];}
 
     // ビジュアル情報の取得
     public VisualMetadata getVisualMetadata() {
@@ -106,7 +106,7 @@ public class EntitySciencePhenomenon extends Entity {
         ctx.compWave = this.entityData.get(COMP_WAVE);
         ctx.compShield = this.entityData.get(COMP_SHIELD);
         ctx.temperature = this.entityData.get(TEMPERATURE);
-        ctx.type = getType(); // 保存されたタイプを使用
+        ctx.type = getPhenomenonType(); // 保存されたタイプを使用
 
         ScienceEngine.simulateVisuals(ctx);
         return ctx.visuals;
@@ -121,7 +121,7 @@ public class EntitySciencePhenomenon extends Entity {
         super.tick();
 
         float currentRadius = getRadius();
-        PhenomenonType type = getType();
+        PhenomenonType type = getPhenomenonType();
         boolean isActive = false;
 
         // ■■■ タイプごとの挙動分岐 ■■■

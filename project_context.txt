@@ -1271,223 +1271,223 @@ public class RenderMagicSequence extends EntityRenderer<EntityMagicSequence> {
 ==================================================
 FILE_PATH: C:\mincraft-mod\CollaboMod\src\main\java\com\COLLABOMOD\collabomod\client\renderer\RenderMaterialBurst.java
 ==================================================
-package com.COLLABOMOD.collabomod.client.renderer;
-
-import com.COLLABOMOD.collabomod.entity.EntityMaterialBurst;
-import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexConsumer;
-import com.mojang.math.Matrix3f;
-import com.mojang.math.Matrix4f;
-import com.mojang.math.Vector3f;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.entity.EntityRenderer;
-import net.minecraft.client.renderer.entity.EntityRendererProvider;
-import net.minecraft.client.renderer.texture.OverlayTexture;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.phys.Vec3;
-
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Random;
-
-public class RenderMaterialBurst extends EntityRenderer<EntityMaterialBurst> {
-
-    private final Random random = new Random();
-    private static final ResourceLocation BEACON_BEAM_LOCATION = new ResourceLocation("textures/entity/beacon_beam.png");
-
-    // 遞ｲ螯ｻ邂｡逅・Μ繧ｹ繝・
-    private final List<PlasmaBolt> bolts = new ArrayList<>();
-
-    public RenderMaterialBurst(EntityRendererProvider.Context context) {
-        super(context);
-    }
-
-    @Override
-    public ResourceLocation getTextureLocation(EntityMaterialBurst entity) {
-        return BEACON_BEAM_LOCATION;
-    }
-
-    // 笆 驥崎ｦ・ 繧ｫ繝ｪ繝ｳ繧ｰ辟｡蜉ｹ蛹厄ｼ育帥菴薙′豸医∴繧九・繧帝亟縺撰ｼ・
-    @Override
-    public boolean shouldRender(EntityMaterialBurst entity, net.minecraft.client.renderer.culling.Frustum frustum, double x, double y, double z) {
-        return true;
-    }
-
-    @Override
-    public void render(EntityMaterialBurst entity, float entityYaw, float partialTicks, PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
-        super.render(entity, entityYaw, partialTicks, poseStack, buffer, packedLight);
-
-        poseStack.pushPose();
-
-        float radius = entity.getRadius() + 0.1F * partialTicks;
-        float renderRadius = radius * 1.1F;
-        float time = entity.tickCount + partialTicks;
-
-        // 繧ｨ繝ｳ繝・ぅ繝・ぅ縺九ｉ騾乗・蠎ｦ繧貞叙蠕・
-        float globalAlpha = entity.getAlpha();
-
-        // 1. 繧ｨ繝阪Ν繧ｮ繝ｼ繧ｳ繧｢
-        VertexConsumer beamBuilder = buffer.getBuffer(RenderType.entityTranslucent(BEACON_BEAM_LOCATION));
-        poseStack.pushPose();
-        poseStack.mulPose(Vector3f.YP.rotationDegrees(time * 2.0F));
-        drawTexturedSphere(poseStack, beamBuilder, renderRadius, 0.2F, 0.9F, 1.0F, 0.6F * globalAlpha, time * 0.05F);
-        poseStack.popPose();
-
-        // 2. 繧ｨ繝阪Ν繧ｮ繝ｼ繧ｷ繧ｧ繝ｫ
-        VertexConsumer shellBuilder = buffer.getBuffer(RenderType.entityTranslucent(BEACON_BEAM_LOCATION));
-        poseStack.pushPose();
-        poseStack.mulPose(Vector3f.YP.rotationDegrees(-time * 5.0F));
-        poseStack.mulPose(Vector3f.XP.rotationDegrees(time * 3.0F));
-        drawTexturedSphere(poseStack, shellBuilder, renderRadius * 1.05F, 0.8F, 0.95F, 1.0F, 0.3F * globalAlpha, -time * 0.1F);
-        poseStack.popPose();
-
-        // 3. 謖∫ｶ壼梛繝励Λ繧ｺ繝樒ｨｲ螯ｻ
-        if (radius > 2.0F) {
-            updateBolts(radius);
-            poseStack.pushPose();
-            VertexConsumer lightningBuilder = buffer.getBuffer(RenderType.lightning());
-
-            for (PlasmaBolt bolt : bolts) {
-                // 縺薙％縺ｧ globalAlpha 繧呈ｸ｡縺励※縺・∪縺・
-                drawPersistentBolt(poseStack, lightningBuilder, bolt, radius, globalAlpha);
-            }
-
-            poseStack.popPose();
-        } else {
-            bolts.clear();
-        }
-
-        poseStack.popPose();
-    }
-
-    // --- 遞ｲ螯ｻ邂｡逅・---
-    private void updateBolts(float radius) {
-        Iterator<PlasmaBolt> it = bolts.iterator();
-        while (it.hasNext()) {
-            PlasmaBolt bolt = it.next();
-            bolt.age++;
-            if (bolt.age > bolt.maxAge) {
-                it.remove();
-            } else {
-                double drift = 0.05;
-                bolt.direction = bolt.direction.add(
-                        (random.nextDouble() - 0.5) * drift,
-                        (random.nextDouble() - 0.5) * drift,
-                        (random.nextDouble() - 0.5) * drift
-                ).normalize();
-            }
-        }
-        while (bolts.size() < 15) {
-            bolts.add(new PlasmaBolt(random));
-        }
-    }
-
-    // --- 遞ｲ螯ｻ謠冗判 ---
-    // 笆 菫ｮ豁｣邂・園: 蠑墓焚縺ｫ float globalAlpha 繧定ｿｽ蜉縺励∪縺励◆
-    private void drawPersistentBolt(PoseStack poseStack, VertexConsumer builder, PlasmaBolt bolt, float radius, float globalAlpha) {
-        Matrix4f pose = poseStack.last().pose();
-
-        float lifeRatio = 1.0F - ((float)bolt.age / bolt.maxAge);
-        float r = 0.6F; float g = 0.95F; float b = 1.0F;
-
-        // 笆 縺薙％縺ｧ globalAlpha 繧剃ｽｿ逕ｨ縺励※繝輔ぉ繝ｼ繝峨い繧ｦ繝・
-        float a = 0.8F * lifeRatio * globalAlpha;
-
-        Vec3 dir = bolt.direction;
-        Vec3 endPos = dir.scale(radius);
-
-        double distMult = 3.0D + random.nextDouble() * 2.0D;
-        Vec3 startPos = dir.scale(radius * distMult);
-
-        drawJaggedLine(builder, pose, startPos, endPos, r, g, b, a);
-    }
-
-    private void drawJaggedLine(VertexConsumer builder, Matrix4f pose, Vec3 start, Vec3 end, float r, float g, float b, float a) {
-        int segments = 8;
-        Vec3 diff = end.subtract(start);
-        double totalDistance = diff.length();
-        Vec3 step = diff.scale(1.0 / segments);
-        Vec3 currentPos = start;
-
-        for (int j = 0; j < segments; j++) {
-            Vec3 nextPos;
-            if (j == segments - 1) {
-                nextPos = end;
-            } else {
-                double progress = (double)j / segments;
-                double jitterScale = totalDistance * 0.1 * (1.0 - progress);
-                double jx = (random.nextDouble() - 0.5) * jitterScale;
-                double jy = (random.nextDouble() - 0.5) * jitterScale;
-                double jz = (random.nextDouble() - 0.5) * jitterScale;
-                nextPos = start.add(step.scale(j + 1)).add(jx, jy, jz);
-            }
-
-            builder.vertex(pose, (float)currentPos.x, (float)currentPos.y, (float)currentPos.z)
-                    .color(r, g, b, a).uv(0, 0).uv2(240, 240).normal(0, 1, 0).endVertex();
-            builder.vertex(pose, (float)nextPos.x, (float)nextPos.y, (float)nextPos.z)
-                    .color(r, g, b, a).uv(0, 0).uv2(240, 240).normal(0, 1, 0).endVertex();
-
-            currentPos = nextPos;
-        }
-    }
-
-    // --- 逅・ｽ捺緒逕ｻ ---
-    private void drawTexturedSphere(PoseStack poseStack, VertexConsumer builder, float r, float red, float green, float blue, float alpha, float uvOffset) {
-        Matrix4f pose = poseStack.last().pose();
-        Matrix3f normal = poseStack.last().normal();
-        int stacks = 24; int slices = 24;
-
-        for (int i = 0; i < stacks; i++) {
-            double lat0 = Math.PI * (-0.5 + (double) (i - 1) / stacks);
-            double z0 = Math.sin(lat0) * r;
-            double zr0 = Math.cos(lat0) * r;
-            double lat1 = Math.PI * (-0.5 + (double) i / stacks);
-            double z1 = Math.sin(lat1) * r;
-            double zr1 = Math.cos(lat1) * r;
-            float v0 = (float) (i - 1) / stacks + uvOffset;
-            float v1 = (float) i / stacks + uvOffset;
-
-            for (int j = 0; j < slices; j++) {
-                double lng = 2 * Math.PI * (double) (j - 1) / slices;
-                double x = Math.cos(lng);
-                double y = Math.sin(lng);
-                double lngNext = 2 * Math.PI * (double) j / slices;
-                double xNext = Math.cos(lngNext);
-                double yNext = Math.sin(lngNext);
-                float u0 = (float) (j - 1) / slices;
-                float u1 = (float) j / slices;
-
-                addTexturedVertex(builder, pose, normal, x * zr0, y * zr0, z0, u0, v0, red, green, blue, alpha);
-                addTexturedVertex(builder, pose, normal, x * zr1, y * zr1, z1, u0, v1, red, green, blue, alpha);
-                addTexturedVertex(builder, pose, normal, xNext * zr1, yNext * zr1, z1, u1, v1, red, green, blue, alpha);
-                addTexturedVertex(builder, pose, normal, xNext * zr0, yNext * zr0, z0, u1, v0, red, green, blue, alpha);
-            }
-        }
-    }
-
-    private void addTexturedVertex(VertexConsumer builder, Matrix4f pose, Matrix3f normal, double x, double y, double z, float u, float v, float r, float g, float b, float a) {
-        builder.vertex(pose, (float)x, (float)y, (float)z).color(r, g, b, a).uv(u, v).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(240, 240).normal(normal, (float)x, (float)y, (float)z).endVertex();
-    }
-
-    // --- 蜀・Κ繧ｯ繝ｩ繧ｹ ---
-    private static class PlasmaBolt {
-        Vec3 direction;
-        int age;
-        int maxAge;
-
-        public PlasmaBolt(Random rand) {
-            double x = rand.nextGaussian();
-            double y = rand.nextGaussian();
-            double z = rand.nextGaussian();
-            double norm = Math.sqrt(x*x + y*y + z*z);
-            this.direction = new Vec3(x / norm, y / norm, z / norm);
-            this.age = 0;
-            this.maxAge = 10 + rand.nextInt(20);
-        }
-    }
-}
+//package com.COLLABOMOD.collabomod.client.renderer;
+//
+//import com.COLLABOMOD.collabomod.entity.EntityMaterialBurst;
+//import com.mojang.blaze3d.vertex.PoseStack;
+//import com.mojang.blaze3d.vertex.VertexConsumer;
+//import com.mojang.math.Matrix3f;
+//import com.mojang.math.Matrix4f;
+//import com.mojang.math.Vector3f;
+//import net.minecraft.client.renderer.MultiBufferSource;
+//import net.minecraft.client.renderer.RenderType;
+//import net.minecraft.client.renderer.entity.EntityRenderer;
+//import net.minecraft.client.renderer.entity.EntityRendererProvider;
+//import net.minecraft.client.renderer.texture.OverlayTexture;
+//import net.minecraft.resources.ResourceLocation;
+//import net.minecraft.world.phys.Vec3;
+//
+//import java.util.ArrayList;
+//import java.util.Iterator;
+//import java.util.List;
+//import java.util.Random;
+//
+//public class RenderMaterialBurst extends EntityRenderer<EntityMaterialBurst> {
+//
+//    private final Random random = new Random();
+//    private static final ResourceLocation BEACON_BEAM_LOCATION = new ResourceLocation("textures/entity/beacon_beam.png");
+//
+//    // 遞ｲ螯ｻ邂｡逅・Μ繧ｹ繝・
+//    private final List<PlasmaBolt> bolts = new ArrayList<>();
+//
+//    public RenderMaterialBurst(EntityRendererProvider.Context context) {
+//        super(context);
+//    }
+//
+//    @Override
+//    public ResourceLocation getTextureLocation(EntityMaterialBurst entity) {
+//        return BEACON_BEAM_LOCATION;
+//    }
+//
+//    // 笆 驥崎ｦ・ 繧ｫ繝ｪ繝ｳ繧ｰ辟｡蜉ｹ蛹厄ｼ育帥菴薙′豸医∴繧九・繧帝亟縺撰ｼ・
+//    @Override
+//    public boolean shouldRender(EntityMaterialBurst entity, net.minecraft.client.renderer.culling.Frustum frustum, double x, double y, double z) {
+//        return true;
+//    }
+//
+//    @Override
+//    public void render(EntityMaterialBurst entity, float entityYaw, float partialTicks, PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
+//        super.render(entity, entityYaw, partialTicks, poseStack, buffer, packedLight);
+//
+//        poseStack.pushPose();
+//
+//        float radius = entity.getRadius() + 0.1F * partialTicks;
+//        float renderRadius = radius * 1.1F;
+//        float time = entity.tickCount + partialTicks;
+//
+//        // 繧ｨ繝ｳ繝・ぅ繝・ぅ縺九ｉ騾乗・蠎ｦ繧貞叙蠕・
+//        float globalAlpha = entity.getAlpha();
+//
+//        // 1. 繧ｨ繝阪Ν繧ｮ繝ｼ繧ｳ繧｢
+//        VertexConsumer beamBuilder = buffer.getBuffer(RenderType.entityTranslucent(BEACON_BEAM_LOCATION));
+//        poseStack.pushPose();
+//        poseStack.mulPose(Vector3f.YP.rotationDegrees(time * 2.0F));
+//        drawTexturedSphere(poseStack, beamBuilder, renderRadius, 0.2F, 0.9F, 1.0F, 0.6F * globalAlpha, time * 0.05F);
+//        poseStack.popPose();
+//
+//        // 2. 繧ｨ繝阪Ν繧ｮ繝ｼ繧ｷ繧ｧ繝ｫ
+//        VertexConsumer shellBuilder = buffer.getBuffer(RenderType.entityTranslucent(BEACON_BEAM_LOCATION));
+//        poseStack.pushPose();
+//        poseStack.mulPose(Vector3f.YP.rotationDegrees(-time * 5.0F));
+//        poseStack.mulPose(Vector3f.XP.rotationDegrees(time * 3.0F));
+//        drawTexturedSphere(poseStack, shellBuilder, renderRadius * 1.05F, 0.8F, 0.95F, 1.0F, 0.3F * globalAlpha, -time * 0.1F);
+//        poseStack.popPose();
+//
+//        // 3. 謖∫ｶ壼梛繝励Λ繧ｺ繝樒ｨｲ螯ｻ
+//        if (radius > 2.0F) {
+//            updateBolts(radius);
+//            poseStack.pushPose();
+//            VertexConsumer lightningBuilder = buffer.getBuffer(RenderType.lightning());
+//
+//            for (PlasmaBolt bolt : bolts) {
+//                // 縺薙％縺ｧ globalAlpha 繧呈ｸ｡縺励※縺・∪縺・
+//                drawPersistentBolt(poseStack, lightningBuilder, bolt, radius, globalAlpha);
+//            }
+//
+//            poseStack.popPose();
+//        } else {
+//            bolts.clear();
+//        }
+//
+//        poseStack.popPose();
+//    }
+//
+//    // --- 遞ｲ螯ｻ邂｡逅・---
+//    private void updateBolts(float radius) {
+//        Iterator<PlasmaBolt> it = bolts.iterator();
+//        while (it.hasNext()) {
+//            PlasmaBolt bolt = it.next();
+//            bolt.age++;
+//            if (bolt.age > bolt.maxAge) {
+//                it.remove();
+//            } else {
+//                double drift = 0.05;
+//                bolt.direction = bolt.direction.add(
+//                        (random.nextDouble() - 0.5) * drift,
+//                        (random.nextDouble() - 0.5) * drift,
+//                        (random.nextDouble() - 0.5) * drift
+//                ).normalize();
+//            }
+//        }
+//        while (bolts.size() < 15) {
+//            bolts.add(new PlasmaBolt(random));
+//        }
+//    }
+//
+//    // --- 遞ｲ螯ｻ謠冗判 ---
+//    // 笆 菫ｮ豁｣邂・園: 蠑墓焚縺ｫ float globalAlpha 繧定ｿｽ蜉縺励∪縺励◆
+//    private void drawPersistentBolt(PoseStack poseStack, VertexConsumer builder, PlasmaBolt bolt, float radius, float globalAlpha) {
+//        Matrix4f pose = poseStack.last().pose();
+//
+//        float lifeRatio = 1.0F - ((float)bolt.age / bolt.maxAge);
+//        float r = 0.6F; float g = 0.95F; float b = 1.0F;
+//
+//        // 笆 縺薙％縺ｧ globalAlpha 繧剃ｽｿ逕ｨ縺励※繝輔ぉ繝ｼ繝峨い繧ｦ繝・
+//        float a = 0.8F * lifeRatio * globalAlpha;
+//
+//        Vec3 dir = bolt.direction;
+//        Vec3 endPos = dir.scale(radius);
+//
+//        double distMult = 3.0D + random.nextDouble() * 2.0D;
+//        Vec3 startPos = dir.scale(radius * distMult);
+//
+//        drawJaggedLine(builder, pose, startPos, endPos, r, g, b, a);
+//    }
+//
+//    private void drawJaggedLine(VertexConsumer builder, Matrix4f pose, Vec3 start, Vec3 end, float r, float g, float b, float a) {
+//        int segments = 8;
+//        Vec3 diff = end.subtract(start);
+//        double totalDistance = diff.length();
+//        Vec3 step = diff.scale(1.0 / segments);
+//        Vec3 currentPos = start;
+//
+//        for (int j = 0; j < segments; j++) {
+//            Vec3 nextPos;
+//            if (j == segments - 1) {
+//                nextPos = end;
+//            } else {
+//                double progress = (double)j / segments;
+//                double jitterScale = totalDistance * 0.1 * (1.0 - progress);
+//                double jx = (random.nextDouble() - 0.5) * jitterScale;
+//                double jy = (random.nextDouble() - 0.5) * jitterScale;
+//                double jz = (random.nextDouble() - 0.5) * jitterScale;
+//                nextPos = start.add(step.scale(j + 1)).add(jx, jy, jz);
+//            }
+//
+//            builder.vertex(pose, (float)currentPos.x, (float)currentPos.y, (float)currentPos.z)
+//                    .color(r, g, b, a).uv(0, 0).uv2(240, 240).normal(0, 1, 0).endVertex();
+//            builder.vertex(pose, (float)nextPos.x, (float)nextPos.y, (float)nextPos.z)
+//                    .color(r, g, b, a).uv(0, 0).uv2(240, 240).normal(0, 1, 0).endVertex();
+//
+//            currentPos = nextPos;
+//        }
+//    }
+//
+//    // --- 逅・ｽ捺緒逕ｻ ---
+//    private void drawTexturedSphere(PoseStack poseStack, VertexConsumer builder, float r, float red, float green, float blue, float alpha, float uvOffset) {
+//        Matrix4f pose = poseStack.last().pose();
+//        Matrix3f normal = poseStack.last().normal();
+//        int stacks = 24; int slices = 24;
+//
+//        for (int i = 0; i < stacks; i++) {
+//            double lat0 = Math.PI * (-0.5 + (double) (i - 1) / stacks);
+//            double z0 = Math.sin(lat0) * r;
+//            double zr0 = Math.cos(lat0) * r;
+//            double lat1 = Math.PI * (-0.5 + (double) i / stacks);
+//            double z1 = Math.sin(lat1) * r;
+//            double zr1 = Math.cos(lat1) * r;
+//            float v0 = (float) (i - 1) / stacks + uvOffset;
+//            float v1 = (float) i / stacks + uvOffset;
+//
+//            for (int j = 0; j < slices; j++) {
+//                double lng = 2 * Math.PI * (double) (j - 1) / slices;
+//                double x = Math.cos(lng);
+//                double y = Math.sin(lng);
+//                double lngNext = 2 * Math.PI * (double) j / slices;
+//                double xNext = Math.cos(lngNext);
+//                double yNext = Math.sin(lngNext);
+//                float u0 = (float) (j - 1) / slices;
+//                float u1 = (float) j / slices;
+//
+//                addTexturedVertex(builder, pose, normal, x * zr0, y * zr0, z0, u0, v0, red, green, blue, alpha);
+//                addTexturedVertex(builder, pose, normal, x * zr1, y * zr1, z1, u0, v1, red, green, blue, alpha);
+//                addTexturedVertex(builder, pose, normal, xNext * zr1, yNext * zr1, z1, u1, v1, red, green, blue, alpha);
+//                addTexturedVertex(builder, pose, normal, xNext * zr0, yNext * zr0, z0, u1, v0, red, green, blue, alpha);
+//            }
+//        }
+//    }
+//
+//    private void addTexturedVertex(VertexConsumer builder, Matrix4f pose, Matrix3f normal, double x, double y, double z, float u, float v, float r, float g, float b, float a) {
+//        builder.vertex(pose, (float)x, (float)y, (float)z).color(r, g, b, a).uv(u, v).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(240, 240).normal(normal, (float)x, (float)y, (float)z).endVertex();
+//    }
+//
+//    // --- 蜀・Κ繧ｯ繝ｩ繧ｹ ---
+//    private static class PlasmaBolt {
+//        Vec3 direction;
+//        int age;
+//        int maxAge;
+//
+//        public PlasmaBolt(Random rand) {
+//            double x = rand.nextGaussian();
+//            double y = rand.nextGaussian();
+//            double z = rand.nextGaussian();
+//            double norm = Math.sqrt(x*x + y*y + z*z);
+//            this.direction = new Vec3(x / norm, y / norm, z / norm);
+//            this.age = 0;
+//            this.maxAge = 10 + rand.nextInt(20);
+//        }
+//    }
+//}
 
 ==================================================
 FILE_PATH: C:\mincraft-mod\CollaboMod\src\main\java\com\COLLABOMOD\collabomod\client\renderer\RenderUniversalMagic.java
@@ -1498,6 +1498,7 @@ import com.COLLABOMOD.collabomod.client.util.GeometryHelper;
 import com.COLLABOMOD.collabomod.entity.EntityMagicSequence;
 import com.COLLABOMOD.collabomod.magic.EnumMagicShape;
 import com.COLLABOMOD.collabomod.magic.VisualMetadata;
+import com.COLLABOMOD.collabomod.entity.EntitySciencePhenomenon;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -2228,233 +2229,233 @@ public class EntityMagicSequence extends Entity {
 ==================================================
 FILE_PATH: C:\mincraft-mod\CollaboMod\src\main\java\com\COLLABOMOD\collabomod\entity\EntityMaterialBurst.java
 ==================================================
-package com.COLLABOMOD.collabomod.entity;
-
-import com.COLLABOMOD.collabomod.magic.VisualMetadata;
-import com.COLLABOMOD.collabomod.physics.PhysicsSystem;
-import com.COLLABOMOD.collabomod.register.EntityRegister;
-import com.COLLABOMOD.collabomod.science.ScienceContext;
-import com.COLLABOMOD.collabomod.science.ScienceEngine;
-import com.COLLABOMOD.collabomod.science.PhenomenonType;
-import com.mojang.math.Vector3f; // 濶ｲ縺ｮ謖・ｮ壹↓蠢・ｦ・
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.particles.DustParticleOptions;
-import net.minecraft.core.particles.ParticleOptions;
-import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.protocol.Packet;
-import net.minecraft.network.syncher.EntityDataAccessor;
-import net.minecraft.network.syncher.EntityDataSerializers;
-import net.minecraft.network.syncher.SynchedEntityData;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.damagesource.DamageSource;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.LiquidBlock;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.material.FluidState;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.network.NetworkHooks;
-
-import java.util.List;
-import java.util.Random;
-
-public class EntityMaterialBurst extends Entity {
-
-    // 蜷梧悄繝・・繧ｿ: 蜊雁ｾ・√お繝阪Ν繧ｮ繝ｼ縲・乗・蠎ｦ縲√◎縺励※縲梧・蛻・・
-    private static final EntityDataAccessor<Float> CURRENT_RADIUS = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
-    private static final EntityDataAccessor<Float> CURRENT_ENERGY = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
-    private static final EntityDataAccessor<Float> CURRENT_ALPHA = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
-
-    private static final EntityDataAccessor<Integer> CASTER_ID = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.INT);
-    private static final EntityDataAccessor<Float> TEMPERATURE = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
-    private static final EntityDataAccessor<Float> MASS = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
-    private static final EntityDataAccessor<Float> VELOCITY = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
-    // 謌仙・繝・・繧ｿ・郁ｦ九◆逶ｮ縺ｨ迚ｩ逅・嫌蜍輔・豎ｺ螳壹↓蠢・ｦ・ｼ・
-    private static final EntityDataAccessor<Float> COMP_MATTER = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
-    private static final EntityDataAccessor<Float> COMP_WAVE = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
-    private static final EntityDataAccessor<Float> COMP_SHIELD = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
-
-    // 險ｭ螳壼､
-    private float maxRadius = 50.0F;
-    private float expansionSpeed = 0.5F;
-
-    // 繧ｯ繝ｩ繧､繧｢繝ｳ繝育畑繧ｭ繝｣繝・す繝･
-    private VisualMetadata cachedVisuals = null;
-
-    public EntityMaterialBurst(EntityType<EntityMaterialBurst> type, Level level) {
-        super(type, level);
-        this.noCulling = true;
-    }
-
-    // 蛻晄悄蛹也畑繧ｳ繝ｳ繧ｹ繝医Λ繧ｯ繧ｿ
-    public EntityMaterialBurst(Level level, Vec3 pos, ScienceContext ctx, LivingEntity caster) {
-        this(EntityRegister.MATERIAL_BURST.get(), level);
-        this.setPos(pos);
-
-        // Context縺九ｉ繝・・繧ｿ繧偵さ繝斐・
-        this.maxRadius = ctx.radius;
-        this.expansionSpeed = Math.max(0.1F, ctx.velocity * 0.2F); // 騾溷ｺｦ隱ｿ謨ｴ
-
-        this.entityData.set(CURRENT_ENERGY, ctx.energy);
-        this.entityData.set(COMP_MATTER, ctx.compMatter);
-        this.entityData.set(COMP_WAVE, ctx.compWave);
-        this.entityData.set(COMP_SHIELD, ctx.compShield);
-
-        this.entityData.set(TEMPERATURE, ctx.temperature);
-        this.entityData.set(MASS, ctx.mass);
-        this.entityData.set(VELOCITY, ctx.velocity);
-
-        if (caster != null) {
-            this.entityData.set(CASTER_ID, caster.getId());
-        }
-    }
-
-    @Override
-    protected void defineSynchedData() {
-        this.entityData.define(CURRENT_RADIUS, 0.0F);
-        this.entityData.define(CURRENT_ENERGY, 0.0F);
-        this.entityData.define(CURRENT_ALPHA, 1.0F);
-        this.entityData.define(COMP_MATTER, 0.0F);
-        this.entityData.define(COMP_WAVE, 0.0F);
-        this.entityData.define(COMP_SHIELD, 0.0F);
-        this.entityData.define(CASTER_ID, -1);
-        this.entityData.define(TEMPERATURE, 300.0F);
-        this.entityData.define(MASS, 0.0F);
-        this.entityData.define(VELOCITY, 1.0F);
-    }
-
-    // Getter
-    public float getRadius() { return this.entityData.get(CURRENT_RADIUS); }
-    public float getEnergy() { return this.entityData.get(CURRENT_ENERGY); }
-    public float getAlpha() { return this.entityData.get(CURRENT_ALPHA); }
-
-    // 笆 繝薙ず繝･繧｢繝ｫ諠・ｱ縺ｮ蜿門ｾ暦ｼ医Ξ繝ｳ繝繝ｩ繝ｼ縺悟他縺ｶ・・
-    // 繧ｵ繝ｼ繝舌・縺九ｉ蜷梧悄縺輔ｌ縺滓・蛻・､繧偵ｂ縺ｨ縺ｫ縲√け繝ｩ繧､繧｢繝ｳ繝医〒ScienceEngine繧貞屓縺励※隕九◆逶ｮ繧呈ｱｺ繧√ｋ
-    public VisualMetadata getVisualMetadata() {
-        // 豈主屓險育ｮ励☆繧九→驥阪＞縺ｮ縺ｧ繧ｭ繝｣繝・す繝･縺励※繧り憶縺・′縲∝､牙喧縺ｫ蟇ｾ蠢懊☆繧九◆繧∫ｰ｡譏楢ｨ育ｮ・
-        ScienceContext ctx = new ScienceContext();
-        ctx.energy = getEnergy();
-        ctx.radius = getRadius();
-        ctx.compMatter = this.entityData.get(COMP_MATTER);
-        ctx.compWave = this.entityData.get(COMP_WAVE);
-        ctx.compShield = this.entityData.get(COMP_SHIELD);
-        ctx.temperature = this.entityData.get(TEMPERATURE);
-        ctx.type = PhenomenonType.SPHERE_EXPANSION;
-
-        ScienceEngine.simulateVisuals(ctx);
-        return ctx.visuals;
-    }
-
-    // 莠呈鋤逕ｨ・・enderMaterialBurst縺悟他縺ｶ・・
-    public String getRendererID() { return getVisualMetadata().rendererID; }
-    public com.mojang.math.Vector3f getColor() { return getVisualMetadata().mainColor; }
-
-    @Override
-    public void tick() {
-        super.tick();
-
-        float currentRadius = getRadius();
-
-        // 諡｡螟ｧ繝輔ぉ繝ｼ繧ｺ
-        if (currentRadius < maxRadius) {
-            currentRadius += expansionSpeed;
-            this.entityData.set(CURRENT_RADIUS, currentRadius);
-        } else {
-            // 繝輔ぉ繝ｼ繝峨い繧ｦ繝・
-            float alpha = getAlpha() - 0.02F;
-            if (alpha < 0) alpha = 0;
-            this.entityData.set(CURRENT_ALPHA, alpha);
-        }
-
-        // --- 繧ｯ繝ｩ繧､繧｢繝ｳ繝亥・ ---
-        if (this.level.isClientSide) {
-            if (getAlpha() <= 0.0F) return;
-
-            // 髻ｳ縺ｮ貍泌・ (繧ｷ繝ｼ繝ｫ繝峨↑繧蛾撕縺九↓縲∫・逋ｺ縺ｪ繧画ｿ縺励￥)
-            if (this.tickCount % 20 == 0) {
-                boolean isShield = this.entityData.get(COMP_SHIELD) > 0;
-                if (isShield) {
-                    this.level.playLocalSound(this.getX(), this.getY(), this.getZ(),
-                            SoundEvents.BEACON_AMBIENT, SoundSource.PLAYERS, 2.0F, 1.0F, false);
-                } else {
-                    // 譌｢蟄倥・辷・匱髻ｳ
-                }
-            }
-        }
-
-        // --- 繧ｵ繝ｼ繝舌・蛛ｴ ---
-        else {
-            if (getAlpha() <= 0.0F) {
-                this.discard();
-                return;
-            }
-
-            // 笆 迚ｩ逅・お繝ｳ繧ｸ繝ｳ縺ｮ螳溯｡・
-            // 縺薙・繧ｨ繝ｳ繝・ぅ繝・ぅ閾ｪ菴薙ｒ縲檎匱逕滓ｺ舌阪→縺励※迚ｩ逅・ｼ皮ｮ励ｒ陦後≧
-            if (currentRadius < maxRadius) {
-                ScienceContext ctx = new ScienceContext();
-                ctx.energy = getEnergy();
-                ctx.radius = currentRadius;
-                ctx.compMatter = this.entityData.get(COMP_MATTER);
-                ctx.compWave = this.entityData.get(COMP_WAVE);
-                ctx.compShield = this.entityData.get(COMP_SHIELD);
-                ctx.temperature = this.entityData.get(TEMPERATURE);
-                // 笆 菫ｮ豁｣: 繧ｭ繝｣繧ｹ繧ｿ繝ｼ繧貞叙蠕励＠縺ｦ貂｡縺・
-                LivingEntity caster = null;
-                int casterId = this.entityData.get(CASTER_ID);
-                if (casterId != -1) {
-                    Entity e = level.getEntity(casterId);
-                    if (e instanceof LivingEntity) caster = (LivingEntity) e;
-                }
-
-                // target縺ｯ遽・峇鬲疲ｳ輔↑縺ｮ縺ｧnull縺ｧOK (繧ゅ＠縺上・蠢・ｦ√↑繧液argetID繧ゆｿ晏ｭ倥☆繧・
-                PhysicsSystem.applyPhysics(level, this.position(), ctx, caster, null);
-            }
-        }
-    }
-
-    @Override
-    protected void readAdditionalSaveData(CompoundTag tag) {
-        this.entityData.set(CURRENT_RADIUS, tag.getFloat("Radius"));
-        this.entityData.set(CURRENT_ENERGY, tag.getFloat("Energy"));
-        this.entityData.set(CURRENT_ALPHA, tag.getFloat("Alpha"));
-        this.entityData.set(COMP_MATTER, tag.getFloat("CompMatter"));
-        this.entityData.set(COMP_WAVE, tag.getFloat("CompWave"));
-        this.entityData.set(COMP_SHIELD, tag.getFloat("CompShield"));
-        this.maxRadius = tag.getFloat("MaxRadius");
-        this.entityData.set(CASTER_ID, tag.getInt("CasterID"));
-        this.entityData.set(TEMPERATURE, tag.getFloat("Temperature"));
-        this.entityData.set(MASS, tag.getFloat("Mass"));
-        this.entityData.set(VELOCITY, tag.getFloat("Velocity"));
-    }
-
-    @Override
-    protected void addAdditionalSaveData(CompoundTag tag) {
-        tag.putFloat("Radius", getRadius());
-        tag.putFloat("Energy", getEnergy());
-        tag.putFloat("Alpha", getAlpha());
-        tag.putFloat("CompMatter", this.entityData.get(COMP_MATTER));
-        tag.putFloat("CompWave", this.entityData.get(COMP_WAVE));
-        tag.putFloat("CompShield", this.entityData.get(COMP_SHIELD));
-        tag.putFloat("MaxRadius", maxRadius);
-        tag.putFloat("Temperature", this.entityData.get(TEMPERATURE));
-        tag.putFloat("Mass", this.entityData.get(MASS));
-        tag.putFloat("Velocity", this.entityData.get(VELOCITY));
-        this.entityData.set(CASTER_ID, tag.getInt("CasterID"));
-    }
-
-    @Override
-    public Packet<?> getAddEntityPacket() {
-        return NetworkHooks.getEntitySpawningPacket(this);
-    }
-}
+//package com.COLLABOMOD.collabomod.entity;
+//
+//import com.COLLABOMOD.collabomod.magic.VisualMetadata;
+//import com.COLLABOMOD.collabomod.physics.PhysicsSystem;
+//import com.COLLABOMOD.collabomod.register.EntityRegister;
+//import com.COLLABOMOD.collabomod.science.ScienceContext;
+//import com.COLLABOMOD.collabomod.science.ScienceEngine;
+//import com.COLLABOMOD.collabomod.science.PhenomenonType;
+//import com.mojang.math.Vector3f; // 濶ｲ縺ｮ謖・ｮ壹↓蠢・ｦ・
+//import net.minecraft.core.BlockPos;
+//import net.minecraft.core.particles.DustParticleOptions;
+//import net.minecraft.core.particles.ParticleOptions;
+//import net.minecraft.core.particles.ParticleTypes;
+//import net.minecraft.nbt.CompoundTag;
+//import net.minecraft.network.protocol.Packet;
+//import net.minecraft.network.syncher.EntityDataAccessor;
+//import net.minecraft.network.syncher.EntityDataSerializers;
+//import net.minecraft.network.syncher.SynchedEntityData;
+//import net.minecraft.server.level.ServerLevel;
+//import net.minecraft.sounds.SoundEvents;
+//import net.minecraft.sounds.SoundSource;
+//import net.minecraft.world.damagesource.DamageSource;
+//import net.minecraft.world.entity.Entity;
+//import net.minecraft.world.entity.EntityType;
+//import net.minecraft.world.entity.LivingEntity;
+//import net.minecraft.world.level.Level;
+//import net.minecraft.world.level.block.Blocks;
+//import net.minecraft.world.level.block.LiquidBlock;
+//import net.minecraft.world.level.block.state.BlockState;
+//import net.minecraft.world.level.material.FluidState;
+//import net.minecraft.world.phys.AABB;
+//import net.minecraft.world.phys.Vec3;
+//import net.minecraftforge.network.NetworkHooks;
+//
+//import java.util.List;
+//import java.util.Random;
+//
+//public class EntityMaterialBurst extends Entity {
+//
+//    // 蜷梧悄繝・・繧ｿ: 蜊雁ｾ・√お繝阪Ν繧ｮ繝ｼ縲・乗・蠎ｦ縲√◎縺励※縲梧・蛻・・
+//    private static final EntityDataAccessor<Float> CURRENT_RADIUS = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
+//    private static final EntityDataAccessor<Float> CURRENT_ENERGY = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
+//    private static final EntityDataAccessor<Float> CURRENT_ALPHA = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
+//
+//    private static final EntityDataAccessor<Integer> CASTER_ID = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.INT);
+//    private static final EntityDataAccessor<Float> TEMPERATURE = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
+//    private static final EntityDataAccessor<Float> MASS = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
+//    private static final EntityDataAccessor<Float> VELOCITY = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
+//    // 謌仙・繝・・繧ｿ・郁ｦ九◆逶ｮ縺ｨ迚ｩ逅・嫌蜍輔・豎ｺ螳壹↓蠢・ｦ・ｼ・
+//    private static final EntityDataAccessor<Float> COMP_MATTER = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
+//    private static final EntityDataAccessor<Float> COMP_WAVE = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
+//    private static final EntityDataAccessor<Float> COMP_SHIELD = SynchedEntityData.defineId(EntityMaterialBurst.class, EntityDataSerializers.FLOAT);
+//
+//    // 險ｭ螳壼､
+//    private float maxRadius = 50.0F;
+//    private float expansionSpeed = 0.5F;
+//
+//    // 繧ｯ繝ｩ繧､繧｢繝ｳ繝育畑繧ｭ繝｣繝・す繝･
+//    private VisualMetadata cachedVisuals = null;
+//
+//    public EntityMaterialBurst(EntityType<EntityMaterialBurst> type, Level level) {
+//        super(type, level);
+//        this.noCulling = true;
+//    }
+//
+//    // 蛻晄悄蛹也畑繧ｳ繝ｳ繧ｹ繝医Λ繧ｯ繧ｿ
+//    public EntityMaterialBurst(Level level, Vec3 pos, ScienceContext ctx, LivingEntity caster) {
+//        this(EntityRegister.MATERIAL_BURST.get(), level);
+//        this.setPos(pos);
+//
+//        // Context縺九ｉ繝・・繧ｿ繧偵さ繝斐・
+//        this.maxRadius = ctx.radius;
+//        this.expansionSpeed = Math.max(0.1F, ctx.velocity * 0.2F); // 騾溷ｺｦ隱ｿ謨ｴ
+//
+//        this.entityData.set(CURRENT_ENERGY, ctx.energy);
+//        this.entityData.set(COMP_MATTER, ctx.compMatter);
+//        this.entityData.set(COMP_WAVE, ctx.compWave);
+//        this.entityData.set(COMP_SHIELD, ctx.compShield);
+//
+//        this.entityData.set(TEMPERATURE, ctx.temperature);
+//        this.entityData.set(MASS, ctx.mass);
+//        this.entityData.set(VELOCITY, ctx.velocity);
+//
+//        if (caster != null) {
+//            this.entityData.set(CASTER_ID, caster.getId());
+//        }
+//    }
+//
+//    @Override
+//    protected void defineSynchedData() {
+//        this.entityData.define(CURRENT_RADIUS, 0.0F);
+//        this.entityData.define(CURRENT_ENERGY, 0.0F);
+//        this.entityData.define(CURRENT_ALPHA, 1.0F);
+//        this.entityData.define(COMP_MATTER, 0.0F);
+//        this.entityData.define(COMP_WAVE, 0.0F);
+//        this.entityData.define(COMP_SHIELD, 0.0F);
+//        this.entityData.define(CASTER_ID, -1);
+//        this.entityData.define(TEMPERATURE, 300.0F);
+//        this.entityData.define(MASS, 0.0F);
+//        this.entityData.define(VELOCITY, 1.0F);
+//    }
+//
+//    // Getter
+//    public float getRadius() { return this.entityData.get(CURRENT_RADIUS); }
+//    public float getEnergy() { return this.entityData.get(CURRENT_ENERGY); }
+//    public float getAlpha() { return this.entityData.get(CURRENT_ALPHA); }
+//
+//    // 笆 繝薙ず繝･繧｢繝ｫ諠・ｱ縺ｮ蜿門ｾ暦ｼ医Ξ繝ｳ繝繝ｩ繝ｼ縺悟他縺ｶ・・
+//    // 繧ｵ繝ｼ繝舌・縺九ｉ蜷梧悄縺輔ｌ縺滓・蛻・､繧偵ｂ縺ｨ縺ｫ縲√け繝ｩ繧､繧｢繝ｳ繝医〒ScienceEngine繧貞屓縺励※隕九◆逶ｮ繧呈ｱｺ繧√ｋ
+//    public VisualMetadata getVisualMetadata() {
+//        // 豈主屓險育ｮ励☆繧九→驥阪＞縺ｮ縺ｧ繧ｭ繝｣繝・す繝･縺励※繧り憶縺・′縲∝､牙喧縺ｫ蟇ｾ蠢懊☆繧九◆繧∫ｰ｡譏楢ｨ育ｮ・
+//        ScienceContext ctx = new ScienceContext();
+//        ctx.energy = getEnergy();
+//        ctx.radius = getRadius();
+//        ctx.compMatter = this.entityData.get(COMP_MATTER);
+//        ctx.compWave = this.entityData.get(COMP_WAVE);
+//        ctx.compShield = this.entityData.get(COMP_SHIELD);
+//        ctx.temperature = this.entityData.get(TEMPERATURE);
+//        ctx.type = PhenomenonType.SPHERE_EXPANSION;
+//
+//        ScienceEngine.simulateVisuals(ctx);
+//        return ctx.visuals;
+//    }
+//
+//    // 莠呈鋤逕ｨ・・enderMaterialBurst縺悟他縺ｶ・・
+//    public String getRendererID() { return getVisualMetadata().rendererID; }
+//    public com.mojang.math.Vector3f getColor() { return getVisualMetadata().mainColor; }
+//
+//    @Override
+//    public void tick() {
+//        super.tick();
+//
+//        float currentRadius = getRadius();
+//
+//        // 諡｡螟ｧ繝輔ぉ繝ｼ繧ｺ
+//        if (currentRadius < maxRadius) {
+//            currentRadius += expansionSpeed;
+//            this.entityData.set(CURRENT_RADIUS, currentRadius);
+//        } else {
+//            // 繝輔ぉ繝ｼ繝峨い繧ｦ繝・
+//            float alpha = getAlpha() - 0.02F;
+//            if (alpha < 0) alpha = 0;
+//            this.entityData.set(CURRENT_ALPHA, alpha);
+//        }
+//
+//        // --- 繧ｯ繝ｩ繧､繧｢繝ｳ繝亥・ ---
+//        if (this.level.isClientSide) {
+//            if (getAlpha() <= 0.0F) return;
+//
+//            // 髻ｳ縺ｮ貍泌・ (繧ｷ繝ｼ繝ｫ繝峨↑繧蛾撕縺九↓縲∫・逋ｺ縺ｪ繧画ｿ縺励￥)
+//            if (this.tickCount % 20 == 0) {
+//                boolean isShield = this.entityData.get(COMP_SHIELD) > 0;
+//                if (isShield) {
+//                    this.level.playLocalSound(this.getX(), this.getY(), this.getZ(),
+//                            SoundEvents.BEACON_AMBIENT, SoundSource.PLAYERS, 2.0F, 1.0F, false);
+//                } else {
+//                    // 譌｢蟄倥・辷・匱髻ｳ
+//                }
+//            }
+//        }
+//
+//        // --- 繧ｵ繝ｼ繝舌・蛛ｴ ---
+//        else {
+//            if (getAlpha() <= 0.0F) {
+//                this.discard();
+//                return;
+//            }
+//
+//            // 笆 迚ｩ逅・お繝ｳ繧ｸ繝ｳ縺ｮ螳溯｡・
+//            // 縺薙・繧ｨ繝ｳ繝・ぅ繝・ぅ閾ｪ菴薙ｒ縲檎匱逕滓ｺ舌阪→縺励※迚ｩ逅・ｼ皮ｮ励ｒ陦後≧
+//            if (currentRadius < maxRadius) {
+//                ScienceContext ctx = new ScienceContext();
+//                ctx.energy = getEnergy();
+//                ctx.radius = currentRadius;
+//                ctx.compMatter = this.entityData.get(COMP_MATTER);
+//                ctx.compWave = this.entityData.get(COMP_WAVE);
+//                ctx.compShield = this.entityData.get(COMP_SHIELD);
+//                ctx.temperature = this.entityData.get(TEMPERATURE);
+//                // 笆 菫ｮ豁｣: 繧ｭ繝｣繧ｹ繧ｿ繝ｼ繧貞叙蠕励＠縺ｦ貂｡縺・
+//                LivingEntity caster = null;
+//                int casterId = this.entityData.get(CASTER_ID);
+//                if (casterId != -1) {
+//                    Entity e = level.getEntity(casterId);
+//                    if (e instanceof LivingEntity) caster = (LivingEntity) e;
+//                }
+//
+//                // target縺ｯ遽・峇鬲疲ｳ輔↑縺ｮ縺ｧnull縺ｧOK (繧ゅ＠縺上・蠢・ｦ√↑繧液argetID繧ゆｿ晏ｭ倥☆繧・
+//                PhysicsSystem.applyPhysics(level, this.position(), ctx, caster, null);
+//            }
+//        }
+//    }
+//
+//    @Override
+//    protected void readAdditionalSaveData(CompoundTag tag) {
+//        this.entityData.set(CURRENT_RADIUS, tag.getFloat("Radius"));
+//        this.entityData.set(CURRENT_ENERGY, tag.getFloat("Energy"));
+//        this.entityData.set(CURRENT_ALPHA, tag.getFloat("Alpha"));
+//        this.entityData.set(COMP_MATTER, tag.getFloat("CompMatter"));
+//        this.entityData.set(COMP_WAVE, tag.getFloat("CompWave"));
+//        this.entityData.set(COMP_SHIELD, tag.getFloat("CompShield"));
+//        this.maxRadius = tag.getFloat("MaxRadius");
+//        this.entityData.set(CASTER_ID, tag.getInt("CasterID"));
+//        this.entityData.set(TEMPERATURE, tag.getFloat("Temperature"));
+//        this.entityData.set(MASS, tag.getFloat("Mass"));
+//        this.entityData.set(VELOCITY, tag.getFloat("Velocity"));
+//    }
+//
+//    @Override
+//    protected void addAdditionalSaveData(CompoundTag tag) {
+//        tag.putFloat("Radius", getRadius());
+//        tag.putFloat("Energy", getEnergy());
+//        tag.putFloat("Alpha", getAlpha());
+//        tag.putFloat("CompMatter", this.entityData.get(COMP_MATTER));
+//        tag.putFloat("CompWave", this.entityData.get(COMP_WAVE));
+//        tag.putFloat("CompShield", this.entityData.get(COMP_SHIELD));
+//        tag.putFloat("MaxRadius", maxRadius);
+//        tag.putFloat("Temperature", this.entityData.get(TEMPERATURE));
+//        tag.putFloat("Mass", this.entityData.get(MASS));
+//        tag.putFloat("Velocity", this.entityData.get(VELOCITY));
+//        this.entityData.set(CASTER_ID, tag.getInt("CasterID"));
+//    }
+//
+//    @Override
+//    public Packet<?> getAddEntityPacket() {
+//        return NetworkHooks.getEntitySpawningPacket(this);
+//    }
+//}
 
 ==================================================
 FILE_PATH: C:\mincraft-mod\CollaboMod\src\main\java\com\COLLABOMOD\collabomod\entity\EntityMistDispersion.java
@@ -2640,6 +2641,244 @@ public class EntityMistDispersion extends ThrowableProjectile{
             serverLevel.sendParticles(ParticleTypes.CLOUD, x, y, z,
                     10, widthScale * 0.5, 0.5, widthScale * 0.5, 0.02);
         }
+    }
+
+    @Override
+    public Packet<?> getAddEntityPacket() {
+        return NetworkHooks.getEntitySpawningPacket(this);
+    }
+}
+
+==================================================
+FILE_PATH: C:\mincraft-mod\CollaboMod\src\main\java\com\COLLABOMOD\collabomod\entity\EntitySciencePhenomenon.java
+==================================================
+package com.COLLABOMOD.collabomod.entity;
+
+import com.COLLABOMOD.collabomod.magic.VisualMetadata;
+import com.COLLABOMOD.collabomod.physics.PhysicsSystem;
+import com.COLLABOMOD.collabomod.register.EntityRegister;
+import com.COLLABOMOD.collabomod.science.PhenomenonType;
+import com.COLLABOMOD.collabomod.science.ScienceContext;
+import com.COLLABOMOD.collabomod.science.ScienceEngine;
+import com.mojang.math.Vector3f;
+import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.network.NetworkHooks;
+
+public class EntitySciencePhenomenon extends Entity {
+    // 蜷梧悄繝・・繧ｿ
+    private static final EntityDataAccessor<Float> CURRENT_RADIUS = SynchedEntityData.defineId(EntitySciencePhenomenon.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> CURRENT_ENERGY = SynchedEntityData.defineId(EntitySciencePhenomenon.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> CURRENT_ALPHA = SynchedEntityData.defineId(EntitySciencePhenomenon.class, EntityDataSerializers.FLOAT);
+
+    // 迚ｩ逅・ヱ繝ｩ繝｡繝ｼ繧ｿ
+    private static final EntityDataAccessor<Float> TEMPERATURE = SynchedEntityData.defineId(EntitySciencePhenomenon.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> MASS = SynchedEntityData.defineId(EntitySciencePhenomenon.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> VELOCITY = SynchedEntityData.defineId(EntitySciencePhenomenon.class, EntityDataSerializers.FLOAT);
+
+    // 謌仙・繝・・繧ｿ
+    private static final EntityDataAccessor<Float> COMP_MATTER = SynchedEntityData.defineId(EntitySciencePhenomenon.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> COMP_WAVE = SynchedEntityData.defineId(EntitySciencePhenomenon.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> COMP_SHIELD = SynchedEntityData.defineId(EntitySciencePhenomenon.class, EntityDataSerializers.FLOAT);
+
+    // 迴ｾ雎｡繧ｿ繧､繝・(Ordinal蛟､縺ｧ菫晏ｭ・
+    private static final EntityDataAccessor<Integer> PHENOMENON_TYPE = SynchedEntityData.defineId(EntitySciencePhenomenon.class, EntityDataSerializers.INT);
+
+    private static final EntityDataAccessor<Integer> CASTER_ID = SynchedEntityData.defineId(EntitySciencePhenomenon.class, EntityDataSerializers.INT);
+
+    // 繝ｭ繝ｼ繧ｫ繝ｫ螟画焚
+    private float maxRadius = 50.0F;
+    private float expansionSpeed = 0.5F;
+
+    public EntitySciencePhenomenon(EntityType<EntitySciencePhenomenon> type, Level level) {
+        super(type, level);
+        this.noCulling = true;
+    }
+
+    public EntitySciencePhenomenon(Level level, Vec3 pos, ScienceContext ctx, LivingEntity caster) {
+        this(EntityRegister.SCIENCE_PHENOMENON.get(), level);
+        this.setPos(pos);
+
+        this.maxRadius = ctx.radius;
+        this.expansionSpeed = Math.max(0.1F, ctx.velocity * 0.2F);
+
+        this.entityData.set(CURRENT_ENERGY, ctx.energy);
+        this.entityData.set(TEMPERATURE, ctx.temperature);
+        this.entityData.set(MASS, ctx.mass);
+        this.entityData.set(VELOCITY, ctx.velocity);
+
+        this.entityData.set(COMP_MATTER, ctx.compMatter);
+        this.entityData.set(COMP_WAVE, ctx.compWave);
+        this.entityData.set(COMP_SHIELD, ctx.compShield);
+
+        // 笆 繧ｿ繧､繝励ｒ菫晏ｭ・
+        this.entityData.set(PHENOMENON_TYPE, ctx.type.ordinal());
+
+        if (caster != null) {
+            this.entityData.set(CASTER_ID, caster.getId());
+        }
+    }
+
+    @Override
+    protected void defineSynchedData() {
+        this.entityData.define(CURRENT_RADIUS, 0.0F);
+        this.entityData.define(CURRENT_ENERGY, 0.0F);
+        this.entityData.define(CURRENT_ALPHA, 1.0F);
+        this.entityData.define(TEMPERATURE, 300.0F);
+        this.entityData.define(MASS, 0.0F);
+        this.entityData.define(VELOCITY, 1.0F);
+        this.entityData.define(COMP_MATTER, 0.0F);
+        this.entityData.define(COMP_WAVE, 0.0F);
+        this.entityData.define(COMP_SHIELD, 0.0F);
+        this.entityData.define(PHENOMENON_TYPE, PhenomenonType.SPHERE_EXPANSION.ordinal());
+        this.entityData.define(CASTER_ID, -1);
+    }
+
+    // Getter
+    public float getRadius() { return this.entityData.get(CURRENT_RADIUS); }
+    public float getEnergy() { return this.entityData.get(CURRENT_ENERGY); }
+    public float getAlpha() { return this.entityData.get(CURRENT_ALPHA); }
+    public PhenomenonType getType() { return PhenomenonType.values()[this.entityData.get(PHENOMENON_TYPE)]; }
+
+    // 繝薙ず繝･繧｢繝ｫ諠・ｱ縺ｮ蜿門ｾ・
+    public VisualMetadata getVisualMetadata() {
+        ScienceContext ctx = new ScienceContext();
+        ctx.energy = getEnergy();
+        ctx.radius = getRadius();
+        ctx.compMatter = this.entityData.get(COMP_MATTER);
+        ctx.compWave = this.entityData.get(COMP_WAVE);
+        ctx.compShield = this.entityData.get(COMP_SHIELD);
+        ctx.temperature = this.entityData.get(TEMPERATURE);
+        ctx.type = getType(); // 菫晏ｭ倥＆繧後◆繧ｿ繧､繝励ｒ菴ｿ逕ｨ
+
+        ScienceEngine.simulateVisuals(ctx);
+        return ctx.visuals;
+    }
+
+    // 莠呈鋤逕ｨ
+    public String getRendererID() { return getVisualMetadata().rendererID; }
+    public Vector3f getColor() { return getVisualMetadata().mainColor; }
+
+    @Override
+    public void tick() {
+        super.tick();
+
+        float currentRadius = getRadius();
+        PhenomenonType type = getType();
+        boolean isActive = false;
+
+        // 笆笆笆 繧ｿ繧､繝励＃縺ｨ縺ｮ謖吝虚蛻・ｲ・笆笆笆
+
+        // 1. 逅・ｽ楢・蠑ｵ (Expansion): 縺ｩ繧薙←繧灘ｺ・′繧・
+        if (type == PhenomenonType.SPHERE_EXPANSION) {
+            if (currentRadius < maxRadius) {
+                currentRadius += expansionSpeed;
+                this.entityData.set(CURRENT_RADIUS, currentRadius);
+                isActive = true;
+            }
+        }
+        // 2. 縺昴・莉悶・繧ｿ繧､繝・(Point/Beam遲・:
+        // 窶ｻ蟆・擂逧・↓遘ｻ蜍輔Ο繧ｸ繝・け縺ｪ縺ｩ繧偵％縺薙↓霑ｽ蜉縲ゆｻ雁屓縺ｯ邁｡譏鍋噪縺ｫ蟇ｿ蜻ｽ邂｡逅・・縺ｿ
+        else {
+            // 邁｡譏灘ｮ溯｣・ 荳螳壽凾髢鍋蕗縺ｾ繧九↑縺ｩ
+            if (this.tickCount < 100) { // 莉ｮ縺ｮ蟇ｿ蜻ｽ
+                isActive = true;
+            }
+        }
+
+        // 蟇ｿ蜻ｽ蛻・ｌ縺ｪ繧峨ヵ繧ｧ繝ｼ繝峨い繧ｦ繝・
+        if (!isActive) {
+            float alpha = getAlpha() - 0.02F;
+            if (alpha < 0) alpha = 0;
+            this.entityData.set(CURRENT_ALPHA, alpha);
+        }
+
+        // --- 繧ｯ繝ｩ繧､繧｢繝ｳ繝亥・ ---
+        if (this.level.isClientSide) {
+            if (getAlpha() <= 0.0F) return;
+            // 髻ｳ貍泌・
+            if (this.tickCount % 20 == 0) {
+                // 繧ｷ繝ｼ繝ｫ繝峨↑繧蛾撕縺九↓
+                if (this.entityData.get(COMP_SHIELD) > 0) {
+                    this.level.playLocalSound(this.getX(), this.getY(), this.getZ(),
+                            SoundEvents.BEACON_AMBIENT, SoundSource.PLAYERS, 2.0F, 1.0F, false);
+                }
+            }
+        }
+
+        // --- 繧ｵ繝ｼ繝舌・蛛ｴ ---
+        else {
+            if (getAlpha() <= 0.0F) {
+                this.discard();
+                return;
+            }
+
+            // 迚ｩ逅・お繝ｳ繧ｸ繝ｳ縺ｮ螳溯｡・
+            if (isActive) {
+                ScienceContext ctx = new ScienceContext();
+                ctx.energy = getEnergy();
+                ctx.radius = currentRadius;
+                ctx.compMatter = this.entityData.get(COMP_MATTER);
+                ctx.compWave = this.entityData.get(COMP_WAVE);
+                ctx.compShield = this.entityData.get(COMP_SHIELD);
+                ctx.temperature = this.entityData.get(TEMPERATURE);
+                ctx.mass = this.entityData.get(MASS);
+                ctx.velocity = this.entityData.get(VELOCITY);
+                ctx.type = type;
+
+                LivingEntity caster = null;
+                int cid = this.entityData.get(CASTER_ID);
+                if (cid != -1) {
+                    Entity e = level.getEntity(cid);
+                    if (e instanceof LivingEntity) caster = (LivingEntity) e;
+                }
+
+                PhysicsSystem.applyPhysics(level, this.position(), ctx, caster, null);
+            }
+        }
+    }
+
+    @Override
+    protected void readAdditionalSaveData(CompoundTag tag) {
+        this.entityData.set(CURRENT_RADIUS, tag.getFloat("Radius"));
+        this.entityData.set(CURRENT_ENERGY, tag.getFloat("Energy"));
+        this.entityData.set(CURRENT_ALPHA, tag.getFloat("Alpha"));
+        this.entityData.set(COMP_MATTER, tag.getFloat("CompMatter"));
+        this.entityData.set(COMP_WAVE, tag.getFloat("CompWave"));
+        this.entityData.set(COMP_SHIELD, tag.getFloat("CompShield"));
+        this.entityData.set(TEMPERATURE, tag.getFloat("Temperature"));
+        this.entityData.set(MASS, tag.getFloat("Mass"));
+        this.entityData.set(VELOCITY, tag.getFloat("Velocity"));
+        this.entityData.set(PHENOMENON_TYPE, tag.getInt("PType"));
+        this.entityData.set(CASTER_ID, tag.getInt("CasterID"));
+        this.maxRadius = tag.getFloat("MaxRadius");
+    }
+
+    @Override
+    protected void addAdditionalSaveData(CompoundTag tag) {
+        tag.putFloat("Radius", getRadius());
+        tag.putFloat("Energy", getEnergy());
+        tag.putFloat("Alpha", getAlpha());
+        tag.putFloat("CompMatter", this.entityData.get(COMP_MATTER));
+        tag.putFloat("CompWave", this.entityData.get(COMP_WAVE));
+        tag.putFloat("CompShield", this.entityData.get(COMP_SHIELD));
+        tag.putFloat("Temperature", this.entityData.get(TEMPERATURE));
+        tag.putFloat("Mass", this.entityData.get(MASS));
+        tag.putFloat("Velocity", this.entityData.get(VELOCITY));
+        tag.putInt("PType", this.entityData.get(PHENOMENON_TYPE));
+        tag.putInt("CasterID", this.entityData.get(CASTER_ID));
+        tag.putFloat("MaxRadius", maxRadius);
     }
 
     @Override
@@ -4034,7 +4273,7 @@ package com.COLLABOMOD.collabomod.magic;
 import com.COLLABOMOD.collabomod.capability.MagicStatsProvider;
 import com.COLLABOMOD.collabomod.entity.EntityAirBullet;
 import com.COLLABOMOD.collabomod.entity.EntityGramDemolition;
-import com.COLLABOMOD.collabomod.entity.EntityMaterialBurst;
+import com.COLLABOMOD.collabomod.entity.EntitySciencePhenomenon;
 import com.COLLABOMOD.collabomod.world.idea.EidosData;
 import com.COLLABOMOD.collabomod.world.idea.IdeaDimensionData;
 import com.COLLABOMOD.collabomod.physics.PhysicsSystem;
@@ -4089,7 +4328,7 @@ public class SpellExecutor {
         else if (ctx.action == SpellContext.EnumAction.EXPLOSION) {
             // 笆 菫ｮ豁｣: 蜈ｨ縺ｦ縺ｮ辷・匱迴ｾ雎｡繧・EntityMaterialBurst (荳・・迴ｾ雎｡繧ｨ繝ｳ繝・ぅ繝・ぅ) 縺ｫ莉ｻ縺帙ｋ
             // 縺薙ｌ縺ｫ繧医ｊ縲ヾcienceEngine縺ｧ險育ｮ励＆繧後◆縲瑚牡縲阪ｄ縲悟ｽ｢迥ｶ縲阪′蜿肴丐縺輔ｌ縲∫黄逅・お繝ｳ繧ｸ繝ｳ繧らｶ咏ｶ夂噪縺ｫ蜍穂ｽ懊＠縺ｾ縺・
-            EntityMaterialBurst burst = new EntityMaterialBurst(ctx.level, ctx.origin, ctx.science, ctx.caster);
+            EntitySciencePhenomenon burst = new EntitySciencePhenomenon(ctx.level, ctx.origin, ctx.science, ctx.caster);
             ctx.level.addFreshEntity(burst);
 
             // 蛻晏虚縺ｮ髻ｳ
@@ -4109,7 +4348,7 @@ public class SpellExecutor {
 
             // 笆 菫ｮ豁｣: 髦ｲ蠕｡邨千阜繧・EntityMaterialBurst 縺ｧ陦ｨ迴ｾ
             // compShield謌仙・縺悟性縺ｾ繧後※縺・ｋ縺溘ａ縲ヾcienceEngine縺瑚・蜍慕噪縺ｫ縲後す繝ｼ繝ｫ繝峨ラ繝ｼ繝縲阪→縺励※謠冗判縺励∪縺・
-            EntityMaterialBurst shield = new EntityMaterialBurst(ctx.level, pos, ctx.science, ctx.caster);
+            EntitySciencePhenomenon shield = new EntitySciencePhenomenon(ctx.level, pos, ctx.science, ctx.caster);
             ctx.level.addFreshEntity(shield);
 
             ctx.level.playSound(null, pos.x, pos.y, pos.z,
@@ -4395,7 +4634,6 @@ package com.COLLABOMOD.collabomod.main;
 import com.COLLABOMOD.collabomod.client.KeyInit;
 import com.COLLABOMOD.collabomod.register.EntityRegister;
 import net.minecraft.client.renderer.entity.EntityRenderers;
-import com.COLLABOMOD.collabomod.client.renderer.RenderMaterialBurst;
 import com.COLLABOMOD.collabomod.client.renderer.RenderMagicSequence;
 import com.COLLABOMOD.collabomod.client.renderer.RenderUniversalMagic;
 import net.minecraft.client.renderer.entity.NoopRenderer;
@@ -4423,7 +4661,7 @@ public class ClientEventBusSubscriber {
             KeyInit.register();
 
             // 笆 菫ｮ豁｣: 繝槭ユ繝ｪ繧｢繝ｫ繝ｻ繝舌・繧ｹ繝医↓蟆ら畑繝ｬ繝ｳ繝繝ｩ繝ｼ繧貞牡繧雁ｽ薙※
-            //EntityRenderers.register(EntityRegister.MATERIAL_BURST.get(), RenderMaterialBurst::new);
+            EntityRenderers.register(EntityRegister.SCIENCE_PHENOMENON.get(), RenderUniversalMagic::new);
 
         event.enqueueWork(() -> {
             MenuScreens.register(MenuTypeRegister.MAGIC_CONSOLE_MENU.get(), MagicConsoleScreen::new);
@@ -4737,7 +4975,7 @@ FILE_PATH: C:\mincraft-mod\CollaboMod\src\main\java\com\COLLABOMOD\collabomod\ne
 package com.COLLABOMOD.collabomod.network;
 
 import com.COLLABOMOD.collabomod.capability.MagicStatsProvider;
-import com.COLLABOMOD.collabomod.entity.EntityMaterialBurst;
+import com.COLLABOMOD.collabomod.entity.EntitySciencePhenomenon;
 import com.COLLABOMOD.collabomod.science.ScienceContext;
 import net.minecraft.Util;
 import net.minecraft.core.BlockPos;
@@ -4787,7 +5025,7 @@ public class PacketMaterialBurst {
                     ScienceContext burstCtx = ScienceContext.createStrategicClass();
 
                     // 笆 菫ｮ豁｣: 辷・匱縺ｧ縺ｯ縺ｪ縺上∫ｴ螢翫お繝阪Ν繧ｮ繝ｼ菴薙ｒ險ｭ鄂ｮ縺吶ｋ
-                    EntityMaterialBurst burst = new EntityMaterialBurst(
+                    EntitySciencePhenomenon burst = new EntitySciencePhenomenon(
                             level,
                             Vec3.atCenterOf(targetPos), // BlockPos -> Vec3
                             burstCtx,
@@ -5254,6 +5492,7 @@ package com.COLLABOMOD.collabomod.register;
 
 import com.COLLABOMOD.collabomod.entity.*;
 import com.COLLABOMOD.collabomod.main.CollaboMod;
+import com.COLLABOMOD.collabomod.entity.EntitySciencePhenomenon;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -5302,6 +5541,10 @@ public class EntityRegister {
                     .clientTrackingRange(10) // 謠冗判霍晞屬
                     .updateInterval(1)       // 譖ｴ譁ｰ鬆ｻ蠎ｦ・亥屓霆｢繧｢繝九Γ繝ｼ繧ｷ繝ｧ繝ｳ縺ｮ縺溘ａ1・・
                     .build("magic_sequence"));
+
+    public static final RegistryObject<EntityType<EntitySciencePhenomenon>> SCIENCE_PHENOMENON = ENTITIES.register("science_phenomenon",
+            () -> EntityType.Builder.<EntitySciencePhenomenon>of((t, l) -> new EntitySciencePhenomenon(t, l), MobCategory.MISC)
+                    .sized(1.0F, 1.0F).clientTrackingRange(10).updateInterval(1).build("science_phenomenon"));
 
     public static void register(IEventBus eventBus) {
 
