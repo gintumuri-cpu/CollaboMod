@@ -87,64 +87,63 @@ public class ItemCAD extends Item implements ICAD{
     private void castMagic(Level level, Player player, ItemStack stack) {
         player.getCapability(MagicStatsProvider.PLAYER_MAGIC_STATS).ifPresent(cadStats -> {
 
-            // 1. NBTからスクリプトを取得
+            // 1. スクリプト取得
             List<String> script = getScriptFromNBT(stack);
-            if (script.isEmpty()) return; // 空なら何もしない
 
-            // 2. シミュレーションでコストを事前計算
-            // ※SpellResolverではなく、ScriptEngineのsimulateを使います
-            SpellContext simCtx = MagicScriptEngine.simulate(script);
-            int cost = simCtx.cost;
+            // ★デバッグログ: 読み込めたか確認
+            if (!level.isClientSide) {
+                //System.out.println("DEBUG: Casting Magic... Script Lines: " + script.size());
+                if (!script.isEmpty()) {
+                    //System.out.println("DEBUG: Line 1: " + script.get(0));
+                }
+            }
+
+            if (script.isEmpty()) return;
 
             // --- サーバー側の処理 ---
             if (!level.isClientSide) {
-                // ストレスチェック
-                int stress = cadStats.getMentalLoad();
-                if (stress > 70 && level.getRandom().nextInt(100) < (stress - 70) * 2) {
-                    handleFizzle(level, player);
-                    return;
-                }
 
-                // コストチェック＆消費
+                // コスト計算
+                SpellContext simCtx = MagicScriptEngine.simulate(script);
+                int cost = simCtx.cost;
+
+                //System.out.println("DEBUG: Calculated Cost: " + cost);
+
                 if (cadStats.getCurrentPsion() >= cost) {
                     cadStats.setCurrentPsion(cadStats.getCurrentPsion() - cost);
                     cadStats.addMentalLoad(2);
 
-                    // 実行用コンテキストの作成
                     SpellContext ctx = new SpellContext(level, player);
 
-                    // ターゲット情報の取得（ロックオン）
+                    // ターゲット取得
                     EntityHitResult hitResult = getTargetEntityResult(level, player, 30.0D);
                     if (hitResult != null && hitResult.getEntity() instanceof LivingEntity target) {
                         ctx.target = target;
                     }
 
-                    // ■ スクリプトの実行
                     try {
+                        // 実行
+                        //System.out.println("DEBUG: Executing Script...");
                         MagicScriptEngine.execute(ctx, script);
-
-                        // 成功時の基本演出
-                        // (個別の発射音などはScriptEngine内のコマンド処理で鳴ります)
+                        //System.out.println("DEBUG: Execution Finished.");
 
                     } catch (MagicScriptEngine.ScriptExecutionException e) {
-                        // ランタイムエラー（実行時例外）の処理
+                        //System.out.println("DEBUG: Script Error! " + e.getMessage());
                         handleFizzle(level, player);
                         player.sendMessage(new TextComponent("§c起動式エラー [行 " + e.line + "]: " + e.getMessage()), Util.NIL_UUID);
                     }
 
                 } else {
-                    // MP不足
                     if (player.tickCount % 20 == 0) {
-                        level.playSound(null, player.getX(), player.getY(), player.getZ(),
-                                SoundEvents.DISPENSER_FAIL, SoundSource.PLAYERS, 0.5F, 1.0F);
                         player.sendMessage(new TextComponent("想子不足 (必要: " + cost + ")"), Util.NIL_UUID);
                     }
                 }
             }
 
-            // --- クライアント側の処理（手元の演出） ---
+            // --- クライアント側の処理 ---
             if (level.isClientSide) {
-                if (cadStats.getCurrentPsion() >= cost) {
+                SpellContext simCtx = MagicScriptEngine.simulate(script);
+                if (cadStats.getCurrentPsion() >= simCtx.cost) {
                     Vec3 look = player.getLookAngle();
                     Vec3 muzzlePos = player.getEyePosition().add(look.scale(0.8));
                     PsionParticleUtil.spawnPsionRing(level, muzzlePos, look, 0.2F, 10);

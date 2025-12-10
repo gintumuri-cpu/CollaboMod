@@ -2,6 +2,7 @@ package com.COLLABOMOD.collabomod.register;
 
 import com.COLLABOMOD.collabomod.entity.*;
 import com.COLLABOMOD.collabomod.main.CollaboMod;
+import com.COLLABOMOD.collabomod.entity.EntitySciencePhenomenon;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -50,6 +51,10 @@ public class EntityRegister {
                     .clientTrackingRange(10) // 描画距離
                     .updateInterval(1)       // 更新頻度（回転アニメーションのため1）
                     .build("magic_sequence"));
+
+    public static final RegistryObject<EntityType<EntitySciencePhenomenon>> SCIENCE_PHENOMENON = ENTITIES.register("science_phenomenon",
+            () -> EntityType.Builder.<EntitySciencePhenomenon>of((t, l) -> new EntitySciencePhenomenon(t, l), MobCategory.MISC)
+                    .sized(1.0F, 1.0F).clientTrackingRange(10).updateInterval(1).build("science_phenomenon"));
 
     public static void register(IEventBus eventBus) {
 

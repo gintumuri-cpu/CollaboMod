@@ -1,5 +1,6 @@
 package com.COLLABOMOD.collabomod.science;
 
+import com.COLLABOMOD.collabomod.magic.EnumMagicShape;
 import com.COLLABOMOD.collabomod.magic.VisualMetadata;
 import com.mojang.math.Vector3f;
 
@@ -20,6 +21,7 @@ public class ScienceContext {
     public float compMatter = 0.0F; // 物質分解
     public float compWave = 0.0F;   // 振動
     public float compLight = 0.0F;  // 光
+    public float compShield = 0.0F; // ■ 追加: 防御・干渉成分
 
     // 出力される見た目
     public VisualMetadata visuals = new VisualMetadata();
@@ -31,4 +33,21 @@ public class ScienceContext {
     public float distortionIntensity = 0.0F;
 
     public ScienceContext() {}
+
+    public static ScienceContext createStrategicClass() {
+        ScienceContext ctx = new ScienceContext();
+        ctx.type = PhenomenonType.SPHERE_EXPANSION;
+        ctx.energy = 10000.0F;
+        ctx.radius = 50.0F;
+        ctx.velocity = 0.2F;
+        ctx.compMatter = 1.0F;
+        ctx.temperature = 5000.0F;
+        // VisualMetadataもここで設定しておくと安全
+        ctx.visuals = new VisualMetadata("material_burst", 100, new Vector3f(0.2F, 0.9F, 1.0F), 2.0F);
+        ctx.visuals = new VisualMetadata("material_burst", 100, new Vector3f(0.2F, 0.9F, 1.0F), 2.0F);
+        ctx.visuals.shape = EnumMagicShape.SPHERE;
+        ctx.visuals.hasLightning = true;
+
+        return ctx;
+    }
 }

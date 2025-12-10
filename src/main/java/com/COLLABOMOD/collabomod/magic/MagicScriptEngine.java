@@ -20,6 +20,8 @@ public class MagicScriptEngine {
             String line = script.get(i).trim();
             lineIndex = i + 1;
 
+            //System.out.println("DEBUG: Processing: " + line);
+
             if (line.isEmpty() || line.startsWith("//")) continue;
 
             // ループ制限
@@ -92,27 +94,35 @@ public class MagicScriptEngine {
     private static void executeCommand(String line, SpellContext ctx) {
         String cmd = line.trim();
 
-        // 短縮コマンドの展開
+        // エイリアス（短縮名）の展開
         if (cmd.startsWith("Attr.Decomp")) cmd = "Attr.Decomposition()";
-        if (cmd.startsWith("Attr.Vibration")) cmd = "Attr.Vibration()"; // そのまま
-        // ... 必要に応じてマッピングを追加
+        if (cmd.startsWith("Attr.Vib")) cmd = "Attr.Vibration()";
 
-        // 1. コンポーネント呼び出し
+        // 1. 作用 (Action)
         if (cmd.startsWith("Action.Shoot"))    MagicComponentType.ACT_SHOOT.apply(ctx);
         else if (cmd.startsWith("Action.Explode"))  MagicComponentType.ACT_EXPLODE.apply(ctx);
         else if (cmd.startsWith("Action.Restore"))  MagicComponentType.ACT_RESTORE.apply(ctx);
+        else if (cmd.startsWith("Action.Move"))     MagicComponentType.ACT_MOVE.apply(ctx);   // 追加
+        else if (cmd.startsWith("Action.Defend"))   MagicComponentType.ACT_DEFEND.apply(ctx); // 追加
 
+            // 2. 属性 (Attribute)
         else if (cmd.startsWith("Attr.Air"))   MagicComponentType.ATTRIB_AIR.apply(ctx);
         else if (cmd.startsWith("Attr.Vibration")) MagicComponentType.ATTRIB_VIBRATION.apply(ctx);
-            // ここで "Attr.Decomp" も拾えるようにする
-        else if (cmd.startsWith("Attr.Decomp") || cmd.startsWith("Attr.Decomposition")) MagicComponentType.ATTRIB_DECOMPOSITION.apply(ctx);
+        else if (cmd.startsWith("Attr.Decomposition")) MagicComponentType.ATTRIB_DECOMPOSITION.apply(ctx);
+        else if (cmd.startsWith("Attr.Fire"))  MagicComponentType.ATTRIB_FIRE.apply(ctx);  // 追加
+        else if (cmd.startsWith("Attr.Ice"))   MagicComponentType.ATTRIB_ICE.apply(ctx);   // 追加
+        else if (cmd.startsWith("Attr.Accel")) MagicComponentType.ATTRIB_ACCEL.apply(ctx); // 追加
+        else if (cmd.startsWith("Attr.Weight")) MagicComponentType.ATTRIB_WEIGHT.apply(ctx); // 追加
 
-        else if (cmd.startsWith("Mod.Power"))  MagicComponentType.MOD_POWER_UP.apply(ctx);
+            // 3. 強化 (Modifier)
+        else if (cmd.startsWith("Mod.Power"))  MagicComponentType.MOD_POWER.apply(ctx); // MOD_POWER_UP -> Mod.Power
+        else if (cmd.startsWith("Mod.Range"))  MagicComponentType.MOD_RANGE.apply(ctx); // 追加
         else if (cmd.startsWith("Mod.Strategic")) MagicComponentType.MOD_STRATEGIC.apply(ctx);
 
-            // 2. 特殊コマンド
+            // 4. 実行コマンド
         else if (cmd.startsWith("Cast()")) {
-            SpellExecutor.execute(ctx); // その場で発動
+            if (ctx.isSimulation) return;
+            SpellExecutor.execute(ctx);
         }
     }
 

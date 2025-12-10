@@ -8,6 +8,8 @@ import net.minecraft.world.phys.Vec3;
 public class SpellContext {
     public final ScienceContext science = new ScienceContext();
 
+    public boolean isSimulation = false;
+
     public int cost = 0;
     public int castTime = 0;
     public EnumAction action = EnumAction.NONE;
@@ -36,8 +38,9 @@ public class SpellContext {
         }
     }
 
-    // シミュレーション用ダミー
-    public SpellContext() {}
+    public SpellContext() {
+        this.isSimulation = true; // デフォルトでtrueにしておく
+    }
 
     public void setLocation(Vec3 pos, float pitch, float yaw) {
         this.origin = pos;
@@ -45,6 +48,15 @@ public class SpellContext {
         this.rotY = yaw;
     }
 
-    public enum EnumAction { NONE, PROJECTILE, EXPLOSION, RESTORE }
-    public enum EnumAttribute { NONE, AIR, OSCILLATION, DECOMPOSITION, MASS_ENERGY }
+    public enum EnumAction {
+        NONE, PROJECTILE, EXPLOSION, RESTORE,
+        MOVE,   // 移動・加速
+        DEFEND  // 防御・干渉
+    }
+
+    public enum EnumAttribute {
+        NONE, AIR, OSCILLATION, DECOMPOSITION, MASS_ENERGY,
+        ACCEL,  // 加速
+        WEIGHT  // 加重
+    }
 }

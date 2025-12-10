@@ -6,7 +6,9 @@ import com.COLLABOMOD.collabomod.entity.EntityGramDemolition;
 import com.COLLABOMOD.collabomod.entity.EntityMaterialBurst;
 import com.COLLABOMOD.collabomod.world.idea.EidosData;
 import com.COLLABOMOD.collabomod.world.idea.IdeaDimensionData;
+import com.COLLABOMOD.collabomod.physics.PhysicsSystem;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.network.chat.TextComponent;
@@ -17,6 +19,7 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.Vec3;
 
 public class SpellExecutor {
 
@@ -24,6 +27,7 @@ public class SpellExecutor {
         if (ctx.level.isClientSide) return;
 
         // ■ 1. 射撃タイプ (PROJECTILE)
+        // 射撃は「単発の弾丸エンティティ」なので、ここは個別のエンティティを使います
         if (ctx.action == SpellContext.EnumAction.PROJECTILE) {
 
             float f = 0.017453292F;
@@ -31,7 +35,7 @@ public class SpellExecutor {
             double y = -Math.sin(ctx.rotX * f);
             double z = Math.cos(ctx.rotY * f) * Math.cos(ctx.rotX * f);
 
-            // 空気属性 -> エア・バレット
+            // 分解成分が高い -> グラム
             if (ctx.science.compMatter > 0.5F) {
                 EntityGramDemolition bullet = new EntityGramDemolition(ctx.level, ctx.caster);
                 bullet.setPos(ctx.origin.x, ctx.origin.y, ctx.origin.z);
@@ -40,7 +44,7 @@ public class SpellExecutor {
                 ctx.level.addFreshEntity(bullet);
                 ctx.level.playSound(null, ctx.origin.x, ctx.origin.y, ctx.origin.z, SoundEvents.TRIDENT_THROW, SoundSource.PLAYERS, 1.0F, 0.5F);
             }
-            // それ以外（デフォルト） -> エア・バレット
+            // それ以外 -> エア・バレット
             else {
                 EntityAirBullet bullet = new EntityAirBullet(ctx.level, ctx.caster);
                 bullet.setPos(ctx.origin.x, ctx.origin.y, ctx.origin.z);
@@ -52,17 +56,44 @@ public class SpellExecutor {
 
         // ■ 2. 爆発タイプ (EXPLOSION)
         else if (ctx.action == SpellContext.EnumAction.EXPLOSION) {
+            // ■ 修正: 全ての爆発現象を EntityMaterialBurst (万能現象エンティティ) に任せる
+            // これにより、ScienceEngineで計算された「色」や「形状」が反映され、物理エンジンも継続的に動作します
+            EntityMaterialBurst burst = new EntityMaterialBurst(ctx.level, ctx.origin, ctx.science, ctx.caster);
+            ctx.level.addFreshEntity(burst);
 
-            if (ctx.attribute == SpellContext.EnumAttribute.MASS_ENERGY) {
-                EntityMaterialBurst burst = new EntityMaterialBurst(ctx.level, ctx.origin.x, ctx.origin.y, ctx.origin.z);
-                ctx.level.addFreshEntity(burst);
-                ctx.level.playSound(null, ctx.origin.x, ctx.origin.y, ctx.origin.z, SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.WEATHER, 100.0F, 0.5F);
-            }
+            // 初動の音
+            ctx.level.playSound(null, ctx.origin.x, ctx.origin.y, ctx.origin.z,
+                    SoundEvents.GENERIC_EXPLODE, SoundSource.BLOCKS, 4.0F, 1.0F);
         }
 
         // ■ 3. 回復タイプ (RESTORE)
         else if (ctx.action == SpellContext.EnumAction.RESTORE) {
             executeRestore(ctx);
+        }
+
+        // ■ 4. 防御タイプ (DEFEND)
+        else if (ctx.action == SpellContext.EnumAction.DEFEND) {
+            // ターゲット指定があればそちらを中心に展開
+            Vec3 pos = (ctx.target != null) ? ctx.target.position() : ctx.origin;
+
+            // ■ 修正: 防御結界も EntityMaterialBurst で表現
+            // compShield成分が含まれているため、ScienceEngineが自動的に「シールドドーム」として描画します
+            EntityMaterialBurst shield = new EntityMaterialBurst(ctx.level, pos, ctx.science, ctx.caster);
+            ctx.level.addFreshEntity(shield);
+
+            ctx.level.playSound(null, pos.x, pos.y, pos.z,
+                    SoundEvents.BEACON_ACTIVATE, SoundSource.PLAYERS, 1.0F, 2.0F);
+        }
+
+        // ■ 5. 移動タイプ (MOVE)
+        else if (ctx.action == SpellContext.EnumAction.MOVE) {
+            // 移動（加速や加重）は一瞬のベクトル操作なので、即座に物理エンジンを呼ぶ
+            // もし「持続的な重力場」を作りたい場合は EntityMaterialBurst を使いますが、
+            // 「アクセラレーション（自分を飛ばす）」などは即時実行が適しています
+            PhysicsSystem.applyPhysics(ctx.level, ctx.origin, ctx.science, ctx.caster, ctx.target); // ターゲット判定などはPhysicsSystem内で行う
+
+            ctx.level.playSound(null, ctx.origin.x, ctx.origin.y, ctx.origin.z,
+                    SoundEvents.ELYTRA_FLYING, SoundSource.PLAYERS, 1.0F, 1.5F);
         }
     }
 

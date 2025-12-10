@@ -17,12 +17,12 @@ public class ItemEmptyCAD extends ItemCAD {
         // 必要ならここでプロパティを再設定してもOK
     }
 
-    @Override
-    public void appendHoverText(ItemStack stack, @Nullable Level level, List<net.minecraft.network.chat.Component> tooltip, TooltipFlag flag) {
-        // NBTがない場合は「空き容量あり」などを表示
-        if (!stack.hasTag() || !stack.getTag().contains("Components")) {
-            tooltip.add(new TextComponent("§7[未設定] 魔法式がインストールされていません"));
-        }
-        super.appendHoverText(stack, level, tooltip, flag);
-    }
+//    @Override
+//    public void appendHoverText(ItemStack stack, @Nullable Level level, List<net.minecraft.network.chat.Component> tooltip, TooltipFlag flag) {
+//        // NBTがない場合は「空き容量あり」などを表示
+//        if (!stack.hasTag() || !stack.getTag().contains("Components")) {
+//            tooltip.add(new TextComponent("§7[未設定] 魔法式がインストールされていません"));
+//        }
+//        super.appendHoverText(stack, level, tooltip, flag);
+//    }
 }

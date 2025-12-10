@@ -44,12 +44,33 @@ public enum MagicComponentType {
             50
     ),
 
+    ACT_MOVE( // 移動魔法
+            ctx -> {
+                ctx.action = SpellContext.EnumAction.MOVE;
+                ctx.science.type = PhenomenonType.BEAM; // 軌跡のようなイメージ
+                ctx.cost += 15;
+                ctx.castTime += 5;
+            },
+            new VisualMetadata("magic_circle", 5, new Vector3f(0.5F, 1.0F, 1.0F), 1.0F), 15
+    ),
+    ACT_DEFEND( // 防御・干渉魔法
+            ctx -> {
+                ctx.action = SpellContext.EnumAction.DEFEND;
+                ctx.science.type = PhenomenonType.SPHERE_EXPANSION;
+                ctx.science.radius = 3.0F;
+                ctx.science.compShield = 1.0F;
+                ctx.cost += 30;
+                ctx.castTime += 10;
+            },
+            new VisualMetadata("magic_circle", 5, new Vector3f(1.0F, 0.8F, 0.2F), 1.5F), 30
+    ),
 
     // ■■■ 2. 属性（Attribute） ■■■
     ATTRIB_AIR(
             ctx -> {
                 ctx.science.compWave += 0.2F;
                 ctx.science.energy += 10.0F;
+                ctx.cost += 5;
             },
             new VisualMetadata("magic_circle", 5, new Vector3f(0.9F, 0.9F, 1.0F), 1.0F),
             5
@@ -73,9 +94,43 @@ public enum MagicComponentType {
             5
     ),
 
+    ATTRIB_FIRE( // 火炎
+            ctx -> {
+                ctx.science.temperature += 1500.0F; // 温度上昇
+                ctx.science.energy += 20.0F;
+                ctx.cost += 10;
+            },
+            new VisualMetadata("default", 5, new Vector3f(1.0F, 0.4F, 0.0F), 1.0F), 10
+    ),
+
+    ATTRIB_ICE( // 氷結
+            ctx -> {
+                ctx.science.temperature = 100.0F;   // 極低温 (-173℃)
+                ctx.science.energy += 10.0F;
+                ctx.cost += 10;
+            },
+            new VisualMetadata("default", 5, new Vector3f(0.5F, 0.8F, 1.0F), 1.0F), 10
+    ),
+
+    ATTRIB_ACCEL( // 加速 (移動魔法と相性良し)
+            ctx -> {
+                ctx.science.velocity += 5.0F; // 速度アップ
+            },
+            new VisualMetadata("default", 5, new Vector3f(0.5F, 1.0F, 0.5F), 1.0F),
+            10
+    ),
+
+    ATTRIB_WEIGHT( // 加重 (移動阻害・押しつぶし)
+            ctx -> {
+                ctx.science.mass += 100.0F;   // 質量加算
+            },
+            new VisualMetadata("default", 5, new Vector3f(0.5F, 0.0F, 0.5F), 1.0F),
+            10
+    ),
+
 
     // ■■■ 3. 強化（Modifier） ■■■
-    MOD_POWER_UP(
+    MOD_POWER(
             ctx -> {
                 ctx.science.energy *= 1.5F; // 威力1.5倍
                 ctx.cost += 10;             // コスト+10
@@ -83,6 +138,17 @@ public enum MagicComponentType {
             new VisualMetadata("default", 0, new Vector3f(1.0F, 0.0F, 0.0F), 1.0F),
             10
     ),
+
+    MOD_RANGE(
+            ctx -> {
+                ctx.science.radius *= 2.0F;   // 半径2倍
+                ctx.science.velocity *= 1.5F; // 弾速/拡散速度1.5倍
+                ctx.cost += 10;
+            },
+            new VisualMetadata("default", 0, new Vector3f(0.0F, 1.0F, 0.0F), 1.0F),
+            10
+    ),
+
 
     MOD_STRATEGIC(
             ctx -> {

@@ -14,6 +14,7 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
@@ -26,7 +27,7 @@ import java.util.List;
 
 public class EntityMagicSequence extends Entity {
 
-    // ■ 同期データ: 見た目ID, 色RGB, キャスターID, ターゲットID
+    // 同期データ
     private static final EntityDataAccessor<String> VISUAL_ID = SynchedEntityData.defineId(EntityMagicSequence.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<Float> COLOR_R = SynchedEntityData.defineId(EntityMagicSequence.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> COLOR_G = SynchedEntityData.defineId(EntityMagicSequence.class, EntityDataSerializers.FLOAT);
@@ -44,7 +45,6 @@ public class EntityMagicSequence extends Entity {
         this.noCulling = true;
     }
 
-    // ■ 新しいコンストラクタ: ItemCADからリストを受け取る
     public EntityMagicSequence(Level level, LivingEntity caster, List<MagicComponentType> components, VisualMetadata meta, int castTime, Vec3 pos) {
         this(EntityRegister.MAGIC_SEQUENCE.get(), level);
         this.setPos(pos);
@@ -52,7 +52,6 @@ public class EntityMagicSequence extends Entity {
         this.components.addAll(components);
         this.castTime = castTime;
 
-        // ビジュアルデータの同期
         this.entityData.set(VISUAL_ID, meta.rendererID);
         this.entityData.set(COLOR_R, meta.mainColor.x());
         this.entityData.set(COLOR_G, meta.mainColor.y());
@@ -92,7 +91,6 @@ public class EntityMagicSequence extends Entity {
                 return;
             }
 
-            // キャスト完了時に実行
             if (this.age >= this.castTime) {
                 LivingEntity caster = (LivingEntity)casterEntity;
 
@@ -100,14 +98,13 @@ public class EntityMagicSequence extends Entity {
                 SpellContext ctx = new SpellContext(level, caster);
                 ctx.setLocation(this.position(), this.getXRot(), this.getYRot());
 
-                // ターゲット復元
                 int targetId = this.entityData.get(TARGET_ID);
                 if (targetId != -1) {
                     Entity t = level.getEntity(targetId);
                     if (t instanceof LivingEntity livingTarget) ctx.target = livingTarget;
                 }
 
-                // ■ コンポーネント適用
+                // コンポーネント適用
                 for (MagicComponentType comp : components) {
                     comp.apply(ctx);
                 }
@@ -125,7 +122,6 @@ public class EntityMagicSequence extends Entity {
         this.age = tag.getInt("Age");
         this.castTime = tag.getInt("CastTime");
 
-        // リスト復元
         this.components.clear();
         ListTag list = tag.getList("Components", Tag.TAG_STRING);
         for (int i = 0; i < list.size(); i++) {
@@ -147,7 +143,6 @@ public class EntityMagicSequence extends Entity {
         tag.putInt("Age", this.age);
         tag.putInt("CastTime", this.castTime);
 
-        // リスト保存
         ListTag list = new ListTag();
         for (MagicComponentType comp : components) {
             list.add(StringTag.valueOf(comp.name()));
