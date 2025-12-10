@@ -1,7 +1,6 @@
 package com.COLLABOMOD.collabomod.client;
 
 import com.COLLABOMOD.collabomod.capability.MagicStatsProvider;
-import com.COLLABOMOD.collabomod.entity.EntityMaterialBurst;
 import com.COLLABOMOD.collabomod.item.ItemCAD;
 import com.COLLABOMOD.collabomod.item.ItemSilverHorn;
 import com.COLLABOMOD.collabomod.item.ItemThirdEye;

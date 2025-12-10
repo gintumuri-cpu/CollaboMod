@@ -46,6 +46,7 @@ public class EntitySciencePhenomenon extends Entity {
     // ローカル変数
     private float maxRadius = 50.0F;
     private float expansionSpeed = 0.5F;
+    private int maxLifeTime = 200;
 
     public EntitySciencePhenomenon(EntityType<EntitySciencePhenomenon> type, Level level) {
         super(type, level);
@@ -58,6 +59,13 @@ public class EntitySciencePhenomenon extends Entity {
 
         this.maxRadius = ctx.radius;
         this.expansionSpeed = Math.max(0.1F, ctx.velocity * 0.2F);
+
+        if (caster == null) {
+            this.maxLifeTime = 40; // 2秒で消える
+        } else {
+            // プレイヤーの魔法（マテリアルバーストなど）は長めに
+            this.maxLifeTime = 400; // 20秒
+        }
 
         this.entityData.set(CURRENT_ENERGY, ctx.energy);
         this.entityData.set(TEMPERATURE, ctx.temperature);
@@ -119,6 +127,11 @@ public class EntitySciencePhenomenon extends Entity {
     @Override
     public void tick() {
         super.tick();
+
+        if (this.tickCount > maxLifeTime) {
+            this.discard();
+            return;
+        }
 
         float currentRadius = getRadius();
         PhenomenonType type = getPhenomenonType();

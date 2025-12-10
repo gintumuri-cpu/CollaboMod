@@ -27,10 +27,10 @@ public class EntityRegister {
                     .updateInterval(20)
                     .build("mist_dispersion"));
 
-    public static final RegistryObject<EntityType<EntityMaterialBurst>> MATERIAL_BURST = ENTITIES.register("material_burst",
-            () -> EntityType.Builder.<EntityMaterialBurst>of(
+    public static final RegistryObject<EntityType<EntitySciencePhenomenon>> MATERIAL_BURST = ENTITIES.register("material_burst",
+            () -> EntityType.Builder.<EntitySciencePhenomenon>of(
                             // ★修正: ::new でエラーが出る場合は、明示的にラムダ式で書く
-                            (type, level) -> new EntityMaterialBurst(type, level),
+                            (type, level) -> new EntitySciencePhenomenon(type, level),
                             MobCategory.MISC
                     )
                     .sized(1.0F, 1.0F)

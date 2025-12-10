@@ -18,21 +18,15 @@ import java.util.List;
 public class KineticProcessor {
 
     public void process(Level level, BlockPos center, ScienceContext ctx, LivingEntity caster, LivingEntity target) {
-//        Level level = ctx.level;
-//        Vec3 origin = Vec3.atCenterOf(center);
-//        ScienceContext science = ctx.science;
-
         float radius = ctx.radius;
         Vec3 origin = Vec3.atCenterOf(center);
         AABB area = new AABB(center).inflate(radius);
         List<Entity> entities = level.getEntities(null, area);
 
-        // ■ 1. 加速・移動 (Acceleration)
-        // 速度ベクトル(velocity)が高い場合
+        // 1. 加速 (Accel)
         if (ctx.velocity > 1.5F) {
             for (Entity e : entities) {
                 if (target != null && e != target) continue;
-                // 方向ベクトルがないため、簡易的に中心からの放射ベクトルを使用
                 Vec3 accel = e.position().subtract(origin).normalize().scale(ctx.velocity * 0.5);
                 e.setDeltaMovement(e.getDeltaMovement().add(accel));
                 e.hurtMarked = true;
@@ -40,8 +34,7 @@ public class KineticProcessor {
             }
         }
 
-        // ■ 2. 加重・重力制御 (Weight)
-        // 質量(mass)が付与されている場合
+        // 2. 加重 (Weight)
         if (ctx.mass > 0.0F) {
             for (Entity e : entities) {
                 if (e == caster) continue;
@@ -55,8 +48,7 @@ public class KineticProcessor {
             }
         }
 
-        // ■ 3. 衝撃波 (Shockwave)
-        // 爆発エネルギーによる吹き飛ばし
+        // 3. 衝撃波 (Shockwave)
         if (ctx.energy > 50.0F) {
             for (Entity e : entities) {
                 if (e instanceof LivingEntity && e != caster) {
@@ -70,14 +62,20 @@ public class KineticProcessor {
                 }
             }
 
-            // 脆いブロックの破壊
+            // ブロック破壊 (これも殻のみにする)
             if (ctx.energy > 200.0F) {
                 int r = (int) Math.ceil(radius);
+                float innerRadius = Math.max(0, radius - 1.5F);
+                float innerSq = innerRadius * innerRadius;
+                float outerSq = radius * radius;
+
                 for (int x = -r; x <= r; x++) {
                     for (int y = -r; y <= r; y++) {
                         for (int z = -r; z <= r; z++) {
+                            double distSq = x*x + y*y + z*z;
+                            if (distSq > outerSq || distSq < innerSq) continue; // ■ 最適化
+
                             BlockPos pos = center.offset(x, y, z);
-                            if (pos.distSqr(center) > radius * radius) continue;
                             BlockState state = level.getBlockState(pos);
                             float hardness = state.getDestroySpeed(level, pos);
                             if (hardness >= 0.0F && hardness <= 0.3F) {

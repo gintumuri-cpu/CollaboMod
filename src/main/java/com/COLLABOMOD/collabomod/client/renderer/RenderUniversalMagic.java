@@ -39,77 +39,55 @@ public class RenderUniversalMagic extends EntityRenderer<EntitySciencePhenomenon
     public void render(EntitySciencePhenomenon entity, float entityYaw, float partialTicks, PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
         super.render(entity, entityYaw, partialTicks, poseStack, buffer, packedLight);
 
-        // ■ エンティティからパラメータを取得（※EntityMagicSequenceの更新が必要）
-        // 現時点では古いメソッドしかないため、後でEntity側を更新して getVisualMetadata() を作ります
-        // 仮の実装イメージです
-        /*
-        VisualMetadata meta = entity.getVisualMetadata();
-        */
-        // ↓ 互換用：今の実装に合わせて手動構築
-        VisualMetadata meta = new VisualMetadata();
         String rendererID = entity.getRendererID();
         Vector3f color = entity.getColor();
-        meta.mainColor = entity.getColor();
 
-        // IDから形状を逆算（過渡期用）
-        String id = entity.getRendererID();
-        if (id.equals("material_burst")) {
+        VisualMetadata meta = new VisualMetadata();
+        meta.mainColor = color;
+
+        // 簡易判定
+        if (rendererID.equals("material_burst")) {
             meta.shape = EnumMagicShape.SPHERE;
-            meta.scale = 2.0F;
             meta.hasLightning = true;
+        } else if (rendererID.equals("shield_dome") || rendererID.equals("explosion_sphere")) {
+            meta.shape = EnumMagicShape.SPHERE;
         } else {
             meta.shape = EnumMagicShape.RING;
         }
 
-
         float time = entity.tickCount + partialTicks;
-        float progress = Math.min(1.0F, time / 20.0F); // 本来はcastTimeを使う
+        float progress = Math.min(1.0F, time / 20.0F);
 
         poseStack.pushPose();
-
-        // 共通設定: 回転とテクスチャ
-        //VertexConsumer builder = buffer.getBuffer(RenderType.entityTranslucent(BEAM_TEXTURE));
-        // 向き合わせ
         poseStack.mulPose(Vector3f.YP.rotationDegrees(-entity.getYRot()));
         poseStack.mulPose(Vector3f.XP.rotationDegrees(entity.getXRot()));
 
+        // 発光描画
         VertexConsumer builder = buffer.getBuffer(RenderType.lightning());
 
-        // ■■■ 形状による分岐（if文はここだけ！） ■■■
-
         if (meta.shape == EnumMagicShape.SPHERE) {
-            float scale = 3.0F * progress; // 基本サイズ
+            float baseScale = 3.0F * progress;
 
-            // シールドドームの場合
             if (rendererID.equals("shield_dome")) {
-                scale = 4.0F * progress; // 少し大きく
-                // コア（濃い）
-                GeometryHelper.drawSphere(poseStack, builder, scale, color, 0.6F, time * 0.05F);
-                // シェル（薄い）
-                GeometryHelper.drawSphere(poseStack, builder, scale * 1.1F, color, 0.3F, -time * 0.05F);
+                // シールド: 薄い殻
+                GeometryHelper.drawSphere(poseStack, builder, baseScale, color, 0.4F, time * 0.05F);
+                // 逆回転する内側
+                GeometryHelper.drawSphere(poseStack, builder, baseScale * 0.9F, color, 0.2F, -time * 0.05F);
             }
-            // マテリアルバーストの場合
             else if (rendererID.equals("material_burst")) {
-                scale = 5.0F * progress;
-                GeometryHelper.drawSphere(poseStack, builder, scale, color, 0.8F, time * 0.1F);
-                // 雷 (Lightning)
-                if (meta.hasLightning) {
-                    VertexConsumer lightningBuilder = buffer.getBuffer(RenderType.lightning());
-                    // 簡易的に数本出す
-                    float r = meta.scale * 20.0F * progress * 1.2F;
-                    Vector3f center = new Vector3f(0,0,0);
-                    for(int i=0; i<5; i++) {
-                        // ランダムな方向へ(GeometryHelperのdrawLightningを呼ぶ)
-                    }
-                }
+                // マテリアルバースト:
+                // 1. 濃密なコア
+                GeometryHelper.drawSphere(poseStack, builder, baseScale * 0.5F, new Vector3f(1.0F, 1.0F, 1.0F), 0.9F, time * 0.2F);
+                // 2. メインのエネルギー球 (色はエンティティ由来)
+                GeometryHelper.drawSphere(poseStack, builder, baseScale, color, 0.6F, -time * 0.1F);
+                // 3. 外側のオーラ
+                GeometryHelper.drawSphere(poseStack, builder, baseScale * 1.2F, color, 0.2F, time * 0.05F);
             }
-            // 通常爆発
             else {
-                GeometryHelper.drawSphere(poseStack, builder, scale, color, 0.5F, time * 0.1F);
+                // 通常爆発
+                GeometryHelper.drawSphere(poseStack, builder, baseScale, color, 0.5F, time * 0.1F);
             }
         }
-
-        // ケース2: 魔法陣 (リング)
         else {
             float scale = 1.5F * progress;
             GeometryHelper.drawRing(poseStack, builder, scale, 0.1F, color, 0.8F, time * 2.0F);
@@ -118,18 +96,20 @@ public class RenderUniversalMagic extends EntityRenderer<EntitySciencePhenomenon
 
         poseStack.popPose();
     }
-
-
-    private void addVertex(VertexConsumer builder, Matrix4f pose, float x, float y, float z, float u, float v, Vector3f color) {
-        builder.vertex(pose, x, y, z)
-                .color(color.x(), color.y(), color.z(), 0.8F) // Alpha
-                .uv(u, v)
-                .overlayCoords(OverlayTexture.NO_OVERLAY)
-                .uv2(255, 255) // ★修正: 最大輝度 (15, 15) -> (255, 255)
-                .normal(0, 1, 0)
-                .endVertex();
-    }
 }
+
+
+
+//    private void addVertex(VertexConsumer builder, Matrix4f pose, float x, float y, float z, float u, float v, Vector3f color) {
+//        builder.vertex(pose, x, y, z)
+//                .color(color.x(), color.y(), color.z(), 0.8F) // Alpha
+//                .uv(u, v)
+//                .overlayCoords(OverlayTexture.NO_OVERLAY)
+//                .uv2(255, 255) // ★修正: 最大輝度 (15, 15) -> (255, 255)
+//                .normal(0, 1, 0)
+//                .endVertex();
+//    }
+//}
 //// 雷 (Lightning)
 //        if (meta.hasLightning) {
 //VertexConsumer lightningBuilder = buffer.getBuffer(RenderType.lightning());
