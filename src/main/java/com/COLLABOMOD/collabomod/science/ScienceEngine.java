@@ -10,6 +10,16 @@ public class ScienceEngine {
     public static void simulateVisuals(ScienceContext ctx) {
         VisualMetadata v = ctx.visuals;
 
+        float energyFactor = Math.min(1.0F, ctx.energy / 10000.0F);
+        float tempFactor = Math.min(1.0F, (ctx.temperature - 300.0F) / 4700.0F);
+        v.normalizedIntensity = Math.max(energyFactor, tempFactor);
+
+        float entropy = 0.0F;
+        if (ctx.compMatter > 0) entropy += 0.5F;
+        if (ctx.compWave > 0) entropy += 0.3F;
+        if (ctx.temperature > 2000.0F) entropy += 0.2F;
+        v.entropy = Math.min(1.0F, entropy);
+
         // 1. 形状決定ロジックの高度化
         if (ctx.type == PhenomenonType.SPHERE_EXPANSION) {
 

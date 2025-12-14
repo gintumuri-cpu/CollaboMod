@@ -10,6 +10,7 @@ public class MagicScriptEngine {
     public static void execute(SpellContext ctx, List<String> script) throws ScriptExecutionException {
         ctx.script.clear();
         ctx.script.addAll(script);
+        ctx.science.visuals.scriptHash = generateScriptHash(script);
 
         int instructionCount = 0;
         int lineIndex = 0;
@@ -161,5 +162,21 @@ public class MagicScriptEngine {
             int end = line.indexOf(')');
             return line.substring(start, end).trim();
         } catch (Exception e) { return ""; }
+    }
+
+    private static int generateScriptHash(List<String> script) {
+        int h = 0;
+        for (String line : script) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty() || trimmed.startsWith("//")) continue;
+
+            for (char c : trimmed.toCharArray()) {
+                h = 31 * h + c;
+                h ^= (h << 13);
+                h ^= (h >>> 17);
+                h ^= (h << 5);
+            }
+        }
+        return Math.abs(h);
     }
 }

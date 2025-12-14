@@ -32,8 +32,32 @@ public class ClientCardinalSystem {
         return 300.0F; // データがなければ常温
     }
 
+    public static float getPsionDensity(BlockPos pos) {
+        long chunkKey = new ChunkPos(pos).toLong();
+        if (clientChunkMap.containsKey(chunkKey)) {
+            return clientChunkMap.get(chunkKey).getPsionDensity(pos);
+        }
+        return 100.0F; // 標準濃度
+    }
+
     // レンダラー用: アクティブな全チャンクデータを取得
     public static Map<Long, EnvironmentChunkData> getAllData() {
         return clientChunkMap;
+    }
+
+    public static int getMagicHash(BlockPos pos) {
+        long chunkKey = new ChunkPos(pos).toLong();
+        if (clientChunkMap.containsKey(chunkKey)) {
+            return clientChunkMap.get(chunkKey).getMagicHash(pos);
+        }
+        return 0;
+    }
+
+    public static float getEntropy(BlockPos pos) {
+        long chunkKey = new ChunkPos(pos).toLong();
+        if (clientChunkMap.containsKey(chunkKey)) {
+            return clientChunkMap.get(chunkKey).getEntropy(pos);
+        }
+        return 0.0F;
     }
 }

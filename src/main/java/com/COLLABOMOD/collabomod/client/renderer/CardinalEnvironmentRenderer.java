@@ -3,18 +3,17 @@ package com.COLLABOMOD.collabomod.client.renderer;
 import com.COLLABOMOD.collabomod.client.ClientCardinalSystem;
 import com.COLLABOMOD.collabomod.main.CollaboMod;
 import com.COLLABOMOD.collabomod.world.cardinal.EnvironmentChunkData;
+import com.mojang.math.Vector3f;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
-import java.lang.reflect.Field;
 import java.util.Map;
 import java.util.Random;
 
@@ -22,88 +21,90 @@ import java.util.Random;
 public class CardinalEnvironmentRenderer {
 
     private static final Random random = new Random();
-    private static Field fpsField = null;
+
+    // 描画範囲（ブロック数）
+    private static final int VISUAL_RANGE = 24;
 
     @SubscribeEvent
     public static void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
 
         Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null || mc.player == null) return;
+        Level level = mc.level;
+        if (level == null || mc.player == null || mc.isPaused()) return;
 
-        // ■ Phase 4: クライアント負荷監視 (FPS based LOD)
-        int fps = getClientFPS(mc);
+        BlockPos playerPos = mc.player.blockPosition();
 
-        // 描画距離の調整: FPSが高いなら遠くまで、低いなら近くのみ
-        int renderDistance = (fps > 50) ? 4 : (fps > 30) ? 2 : 1;
+        // クライアントが保持している全チャンクデータを走査
+        Map<Long, EnvironmentChunkData> allData = ClientCardinalSystem.getAllData();
 
-        // パーティクル生成確率の調整
-        float qualityFactor = (fps > 50) ? 1.0F : (fps > 30) ? 0.5F : 0.1F;
+        allData.forEach((chunkKey, data) -> {
+            ChunkPos chunkPos = new ChunkPos(chunkKey);
 
-        ChunkPos playerChunk = mc.player.chunkPosition();
-        Map<Long, EnvironmentChunkData> dataMap = ClientCardinalSystem.getAllData();
+            // プレイヤーから遠すぎるチャンクは無視 (軽量化)
+            // チャンクの中心座標で簡易判定
+            BlockPos chunkCenter = chunkPos.getMiddleBlockPosition(0);
+            if (chunkCenter.distSqr(playerPos) > (VISUAL_RANGE + 16) * (VISUAL_RANGE + 16)) return;
 
-        for (int x = -renderDistance; x <= renderDistance; x++) {
-            for (int z = -renderDistance; z <= renderDistance; z++) {
-                long chunkKey = ChunkPos.asLong(playerChunk.x + x, playerChunk.z + z);
-                if (dataMap.containsKey(chunkKey)) {
-                    ChunkPos cp = new ChunkPos(chunkKey);
-                    renderChunkEffects(mc.level, cp, dataMap.get(chunkKey), qualityFactor);
-                }
-            }
-        }
-    }
+            // 1. 温度の可視化
+            data.getAllTemperatures().forEach((localKey, temp) -> {
+                // 300K(常温)付近は無視
+                if (Math.abs(temp - 300.0F) < 50.0F) return;
 
-    private static int getClientFPS(Minecraft mc) {
-        try {
-            if (fpsField == null) {
-                // 開発環境と本番環境でフィールド名が違うため、両方を試す
-                try {
-                    // 開発環境 (Mojang mappings)
-                    fpsField = Minecraft.class.getDeclaredField("fps");
-                } catch (NoSuchFieldException e) {
-                    // 本番環境 (SRG mappings)
-                    fpsField = ObfuscationReflectionHelper.findField(Minecraft.class, "field_71470_ab");
-                }
-                fpsField.setAccessible(true);
-            }
-            return fpsField.getInt(mc);
-        } catch (Exception e) {
-            // エラー時は安全側に倒して60を返す（処理を止めないため）
-            return 60;
-        }
-    }
+                // 確率判定 (温度が高いほど高確率)
+                // 例: 1000Kで 5% くらいの確率
+                float chance = (Math.abs(temp - 300.0F) / 10000.0F);
+                if (random.nextFloat() > chance) return;
 
-    private static void renderChunkEffects(Level level, ChunkPos cp, EnvironmentChunkData data, float qualityFactor) {
-        Map<Long, Float> temps = data.getAllTemperatures();
+                BlockPos targetPos = restoreWorldPos(chunkPos, localKey);
 
-        temps.forEach((localPosKey, temp) -> {
-            if (Math.abs(temp - 300.0F) < 50.0F) return;
+                // 距離チェック (詳細)
+                if (targetPos.distSqr(playerPos) > VISUAL_RANGE * VISUAL_RANGE) return;
 
-            // 基本確率(0.02) * 品質係数(FPS依存)
-            if (random.nextFloat() > (0.02F * qualityFactor)) return;
-
-            int lx = BlockPos.getX(localPosKey);
-            int ly = BlockPos.getY(localPosKey);
-            int lz = BlockPos.getZ(localPosKey);
-            BlockPos pos = cp.getBlockAt(lx, ly, lz);
-
-            double x = pos.getX() + random.nextDouble();
-            double y = pos.getY() + random.nextDouble();
-            double z = pos.getZ() + random.nextDouble();
-
-            if (temp > 1000.0F) {
-                if (temp > 3000.0F) {
-                    level.addParticle(ParticleTypes.ELECTRIC_SPARK, x, y, z, 0, 0.1, 0);
+                // 色の決定 (高温=赤, 低温=白青)
+                Vector3f color;
+                if (temp > 300.0F) {
+                    color = new Vector3f(1.0F, 0.4F, 0.0F); // Orange-Red
                 } else {
-                    level.addParticle(ParticleTypes.SMOKE, x, y, z, 0, 0.05, 0);
-                    if (random.nextFloat() < 0.1F) {
-                        level.addParticle(ParticleTypes.FLAME, x, y, z, 0, 0.02, 0);
-                    }
+                    color = new Vector3f(0.5F, 0.8F, 1.0F); // Light Blue
                 }
-            } else if (temp < 200.0F) {
-                level.addParticle(ParticleTypes.SNOWFLAKE, x, y, z, 0, -0.05, 0);
-            }
+
+                spawnParticle(level, targetPos, color);
+            });
+
+            // 2. サイオン濃度の可視化
+            data.getAllPsionDensities().forEach((localKey, density) -> {
+                if (density <= 100.0F) return; // 通常以下は無視
+
+                // 濃度が高いほど高確率
+                float chance = (density - 100.0F) / 1000.0F;
+                if (random.nextFloat() > chance) return;
+
+                BlockPos targetPos = restoreWorldPos(chunkPos, localKey);
+
+                if (targetPos.distSqr(playerPos) > VISUAL_RANGE * VISUAL_RANGE) return;
+
+                // サイオンカラー (シアン)
+                spawnParticle(level, targetPos, new Vector3f(0.0F, 1.0F, 1.0F));
+            });
         });
+    }
+
+    // ローカル座標キー(Long)からワールド座標(BlockPos)を復元
+    private static BlockPos restoreWorldPos(ChunkPos chunkPos, long localKey) {
+        BlockPos local = BlockPos.of(localKey);
+        int x = chunkPos.getMinBlockX() + local.getX();
+        int y = local.getY();
+        int z = chunkPos.getMinBlockZ() + local.getZ();
+        return new BlockPos(x, y, z);
+    }
+
+    private static void spawnParticle(Level level, BlockPos pos, Vector3f color) {
+        double x = pos.getX() + random.nextDouble();
+        double y = pos.getY() + random.nextDouble();
+        double z = pos.getZ() + random.nextDouble();
+
+        // DustParticle (RGB + Scale)
+        level.addParticle(new DustParticleOptions(color, 1.0F), x, y, z, 0, 0, 0);
     }
 }

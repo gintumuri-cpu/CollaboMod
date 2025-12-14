@@ -5,8 +5,7 @@ import net.minecraft.nbt.CompoundTag;
 
 public class VisualMetadata {
     public EnumMagicShape shape = EnumMagicShape.RING;
-    public EnumMagicAnchor anchorType = EnumMagicAnchor.WORLD_FIXED; // ■ 追加: アンカータイプ
-
+    public EnumMagicAnchor anchorType = EnumMagicAnchor.WORLD_FIXED;
     public int priority = 0;
     public Vector3f mainColor = new Vector3f(1.0F, 1.0F, 1.0F);
     public Vector3f subColor = new Vector3f(0.0F, 0.5F, 1.0F);
@@ -23,6 +22,10 @@ public class VisualMetadata {
     public boolean hasLightning = false;
     public boolean isSolid = false;
     public String rendererID = "default";
+
+    public int scriptHash = 0;
+    public float normalizedIntensity = 0.0F;
+    public float entropy = 0.0F;
 
     public VisualMetadata() {}
 
@@ -62,6 +65,10 @@ public class VisualMetadata {
         tag.putBoolean("IsWavy", isWavy);
         tag.putBoolean("IsSpiky", isSpiky);
         tag.putInt("Layers", layerCount);
+
+        tag.putInt("ScriptHash", scriptHash);
+        tag.putFloat("NormIntensity", normalizedIntensity);
+        tag.putFloat("Entropy", entropy);
         return tag;
     }
 
@@ -77,6 +84,10 @@ public class VisualMetadata {
         if (tag.contains("IsWavy")) meta.isWavy = tag.getBoolean("IsWavy");
         if (tag.contains("IsSpiky")) meta.isSpiky = tag.getBoolean("IsSpiky");
         if (tag.contains("Layers")) meta.layerCount = tag.getInt("Layers");
+
+        if (tag.contains("ScriptHash")) meta.scriptHash = tag.getInt("ScriptHash");
+        if (tag.contains("NormIntensity")) meta.normalizedIntensity = tag.getFloat("NormIntensity");
+        if (tag.contains("Entropy")) meta.entropy = tag.getFloat("Entropy");
         return meta;
     }
 }
