@@ -5,11 +5,15 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class SpellContext {
     public final ScienceContext science = new ScienceContext();
 
+    public List<String> script = new ArrayList<>();
+    public boolean fromSequence = false;
     public boolean isSimulation = false;
-
     public int cost = 0;
     public int castTime = 0;
     public EnumAction action = EnumAction.NONE;
@@ -46,6 +50,11 @@ public class SpellContext {
         this.origin = pos;
         this.rotX = pitch;
         this.rotY = yaw;
+        float f = 0.017453292F;
+        double x = -Math.sin(yaw * f) * Math.cos(pitch * f);
+        double y = -Math.sin(pitch * f);
+        double z = Math.cos(yaw * f) * Math.cos(pitch * f);
+        this.direction = new Vec3(x, y, z).normalize();
     }
 
     public enum EnumAction {

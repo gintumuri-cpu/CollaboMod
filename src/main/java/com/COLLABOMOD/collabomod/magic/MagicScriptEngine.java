@@ -8,6 +8,9 @@ public class MagicScriptEngine {
     private static final int MAX_INSTRUCTIONS = 100;
 
     public static void execute(SpellContext ctx, List<String> script) throws ScriptExecutionException {
+        ctx.script.clear();
+        ctx.script.addAll(script);
+
         int instructionCount = 0;
         int lineIndex = 0;
 
@@ -91,6 +94,7 @@ public class MagicScriptEngine {
         return ctx;
     }
 
+
     private static void executeCommand(String line, SpellContext ctx) {
         String cmd = line.trim();
 
@@ -119,6 +123,15 @@ public class MagicScriptEngine {
         else if (cmd.startsWith("Mod.Range"))  MagicComponentType.MOD_RANGE.apply(ctx); // 追加
         else if (cmd.startsWith("Mod.Strategic")) MagicComponentType.MOD_STRATEGIC.apply(ctx);
 
+        if (cmd.startsWith("Mod.Origin")) {
+            String arg = parseStringArg(cmd); // カッコの中身を取得
+            if (arg.equals("RANDOM_AIR")) ctx.science.visuals.anchorType = EnumMagicAnchor.RANDOM_AIR;
+            else if (arg.equals("CASTER")) ctx.science.visuals.anchorType = EnumMagicAnchor.CASTER_ANCHORED;
+            else if (arg.equals("TARGET")) ctx.science.visuals.anchorType = EnumMagicAnchor.TARGET_ANCHORED;
+            else if (arg.equals("FIXED")) ctx.science.visuals.anchorType = EnumMagicAnchor.WORLD_FIXED;
+            return;
+        }
+
             // 4. 実行コマンド
         else if (cmd.startsWith("Cast()")) {
             if (ctx.isSimulation) return;
@@ -140,5 +153,13 @@ public class MagicScriptEngine {
             super(message);
             this.line = line;
         }
+    }
+
+    private static String parseStringArg(String line) {
+        try {
+            int start = line.indexOf('(') + 1;
+            int end = line.indexOf(')');
+            return line.substring(start, end).trim();
+        } catch (Exception e) { return ""; }
     }
 }

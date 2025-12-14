@@ -7,7 +7,7 @@ import java.util.function.Consumer;
 
 public enum MagicComponentType {
 
-    // ■■■ 1. 作用（Action） ■■■
+    // --- Action ---
     ACT_SHOOT(
             ctx -> {
                 ctx.action = SpellContext.EnumAction.PROJECTILE;
@@ -15,10 +15,10 @@ public enum MagicComponentType {
                 ctx.science.velocity += 2.0F;
                 ctx.science.energy += 10.0F;
                 ctx.cost += 10;
-                ctx.castTime += 5;
+                ctx.castTime += 20; // 魔法陣が見えるように時間を確保
             },
             new VisualMetadata("default", 0, new Vector3f(1.0F, 1.0F, 1.0F), 1.0F),
-            10 // 基本コスト
+            10
     ),
 
     ACT_EXPLODE(
@@ -28,7 +28,8 @@ public enum MagicComponentType {
                 ctx.science.radius = 5.0F;
                 ctx.science.energy += 50.0F;
                 ctx.cost += 20;
-                ctx.castTime += 10;
+                ctx.castTime += 30;
+                ctx.science.visuals.isSpiky = true; // 爆発系はトゲトゲに
             },
             new VisualMetadata("explosion_sphere", 10, new Vector3f(1.0F, 0.5F, 0.0F), 1.0F),
             20
@@ -38,22 +39,22 @@ public enum MagicComponentType {
             ctx -> {
                 ctx.action = SpellContext.EnumAction.RESTORE;
                 ctx.cost += 50;
-                ctx.castTime += 20;
+                ctx.castTime += 40;
             },
             new VisualMetadata("default", 5, new Vector3f(0.5F, 1.0F, 0.5F), 1.0F),
             50
     ),
 
-    ACT_MOVE( // 移動魔法
+    ACT_MOVE(
             ctx -> {
                 ctx.action = SpellContext.EnumAction.MOVE;
-                ctx.science.type = PhenomenonType.BEAM; // 軌跡のようなイメージ
+                ctx.science.type = PhenomenonType.BEAM;
                 ctx.cost += 15;
-                ctx.castTime += 5;
+                ctx.castTime += 10;
             },
             new VisualMetadata("magic_circle", 5, new Vector3f(0.5F, 1.0F, 1.0F), 1.0F), 15
     ),
-    ACT_DEFEND( // 防御・干渉魔法
+    ACT_DEFEND(
             ctx -> {
                 ctx.action = SpellContext.EnumAction.DEFEND;
                 ctx.science.type = PhenomenonType.SPHERE_EXPANSION;
@@ -61,11 +62,12 @@ public enum MagicComponentType {
                 ctx.science.compShield = 1.0F;
                 ctx.cost += 30;
                 ctx.castTime += 10;
+                ctx.science.visuals.shape = EnumMagicShape.SPHERE; // 防御は球体
             },
             new VisualMetadata("magic_circle", 5, new Vector3f(1.0F, 0.8F, 0.2F), 1.5F), 30
     ),
 
-    // ■■■ 2. 属性（Attribute） ■■■
+    // --- Attribute ---
     ATTRIB_AIR(
             ctx -> {
                 ctx.science.compWave += 0.2F;
@@ -80,6 +82,8 @@ public enum MagicComponentType {
             ctx -> {
                 ctx.science.compWave = 1.0F;
                 ctx.science.energy += 30.0F;
+                // ■ 追加: 振動属性なら魔法陣を波打たせる
+                ctx.science.visuals.isWavy = true;
             },
             new VisualMetadata("magic_circle", 5, new Vector3f(0.2F, 0.9F, 1.0F), 1.0F),
             5
@@ -94,46 +98,48 @@ public enum MagicComponentType {
             5
     ),
 
-    ATTRIB_FIRE( // 火炎
+    ATTRIB_FIRE(
             ctx -> {
-                ctx.science.temperature += 1500.0F; // 温度上昇
+                ctx.science.temperature += 1500.0F;
                 ctx.science.energy += 20.0F;
                 ctx.cost += 10;
             },
             new VisualMetadata("default", 5, new Vector3f(1.0F, 0.4F, 0.0F), 1.0F), 10
     ),
 
-    ATTRIB_ICE( // 氷結
+    ATTRIB_ICE(
             ctx -> {
-                ctx.science.temperature = 100.0F;   // 極低温 (-173℃)
+                ctx.science.temperature = 100.0F;
                 ctx.science.energy += 10.0F;
                 ctx.cost += 10;
             },
             new VisualMetadata("default", 5, new Vector3f(0.5F, 0.8F, 1.0F), 1.0F), 10
     ),
 
-    ATTRIB_ACCEL( // 加速 (移動魔法と相性良し)
+    ATTRIB_ACCEL(
             ctx -> {
-                ctx.science.velocity += 5.0F; // 速度アップ
+                ctx.science.velocity += 5.0F;
             },
             new VisualMetadata("default", 5, new Vector3f(0.5F, 1.0F, 0.5F), 1.0F),
             10
     ),
 
-    ATTRIB_WEIGHT( // 加重 (移動阻害・押しつぶし)
+    ATTRIB_WEIGHT(
             ctx -> {
-                ctx.science.mass += 100.0F;   // 質量加算
+                ctx.science.mass += 100.0F;
             },
             new VisualMetadata("default", 5, new Vector3f(0.5F, 0.0F, 0.5F), 1.0F),
             10
     ),
 
 
-    // ■■■ 3. 強化（Modifier） ■■■
+    // --- Modifier ---
     MOD_POWER(
             ctx -> {
-                ctx.science.energy *= 1.5F; // 威力1.5倍
-                ctx.cost += 10;             // コスト+10
+                ctx.science.energy *= 1.5F;
+                ctx.cost += 10;
+                // ■ 追加: パワー強化で魔法陣の層を増やす
+                ctx.science.visuals.layerCount++;
             },
             new VisualMetadata("default", 0, new Vector3f(1.0F, 0.0F, 0.0F), 1.0F),
             10
@@ -141,14 +147,15 @@ public enum MagicComponentType {
 
     MOD_RANGE(
             ctx -> {
-                ctx.science.radius *= 2.0F;   // 半径2倍
-                ctx.science.velocity *= 1.5F; // 弾速/拡散速度1.5倍
+                ctx.science.radius *= 2.0F;
+                ctx.science.velocity *= 1.5F;
                 ctx.cost += 10;
+                // 範囲拡大で魔法陣も大きく
+                ctx.science.visuals.scale *= 1.5F;
             },
             new VisualMetadata("default", 0, new Vector3f(0.0F, 1.0F, 0.0F), 1.0F),
             10
     ),
-
 
     MOD_STRATEGIC(
             ctx -> {
@@ -160,57 +167,22 @@ public enum MagicComponentType {
                 ctx.science.compMatter = 1.0F;
                 ctx.cost += 100;
                 ctx.castTime += 80;
+                ctx.science.visuals.layerCount = 5; // 戦略級は多重展開
+                ctx.science.visuals.hasLightning = true;
             },
             new VisualMetadata("material_burst", 100, new Vector3f(0.2F, 0.9F, 1.0F), 2.0F),
             100
     ),
 
-    // 旧互換用
-    PROJECTILE_AIR(
-            ctx -> {
-                ctx.action = SpellContext.EnumAction.PROJECTILE;
-                ctx.science.type = PhenomenonType.POINT;
-                ctx.science.compWave = 0.2F;
-                ctx.cost += 20;
-                ctx.castTime += 15;
-            },
-            new VisualMetadata("magic_circle", 5, new Vector3f(0.9F, 0.9F, 1.0F), 1.0F),
-            20
-    ),
+    // 互換用ダミー
+    PROJECTILE_AIR(ctx->{}, new VisualMetadata("default", 0, new Vector3f(1,1,1), 1), 0),
+    PROJECTILE_GRAM(ctx->{}, new VisualMetadata("default", 0, new Vector3f(1,1,1), 1), 0),
+    MATERIAL_BURST(ctx->{}, new VisualMetadata("default", 0, new Vector3f(1,1,1), 1), 0);
 
-    PROJECTILE_GRAM(
-            ctx -> {
-                ctx.action = SpellContext.EnumAction.PROJECTILE;
-                ctx.science.compMatter = 1.0F;
-                ctx.cost += 40;
-                ctx.castTime += 0;
-            },
-            new VisualMetadata("magic_circle", 5, new Vector3f(0.2F, 0.9F, 1.0F), 1.0F),
-            40
-    ),
-
-    MATERIAL_BURST(
-            ctx -> {
-                ctx.action = SpellContext.EnumAction.EXPLOSION;
-                ctx.science.type = PhenomenonType.SPHERE_EXPANSION;
-                ctx.science.energy = 10000.0F;
-                ctx.science.radius = 50.0F;
-                ctx.science.temperature = 5000.0F;
-                ctx.science.compMatter = 1.0F;
-                ctx.cost += 50;
-                ctx.castTime += 100;
-            },
-            new VisualMetadata("material_burst", 100, new Vector3f(0.2F, 0.9F, 1.0F), 2.0F),
-            50
-    );
-
-
-    // --- フィールド ---
     public final Consumer<SpellContext> applier;
     public final VisualMetadata visuals;
-    public final int cost; // ■ 追加: これがないとエラーになります
+    public final int cost;
 
-    // コンストラクタ
     MagicComponentType(Consumer<SpellContext> applier, VisualMetadata visuals, int cost) {
         this.applier = applier;
         this.visuals = visuals;
@@ -221,41 +193,7 @@ public enum MagicComponentType {
         applier.accept(context);
     }
 
-
-    // ■■■ 追加: GUI表示用のカテゴリ定義 ■■■
-    public enum Category {
-        ACTION("作用", 0xFFFF5555),      // 赤
-        ATTRIBUTE("属性", 0xFF55FFFF),   // 水色
-        MODIFIER("強化", 0xFFFFFF55),    // 黄色
-        OTHER("その他", 0xFFAAAAAA);     // グレー
-
-        public final String label;
-        public final int color;
-        Category(String label, int color) {
-            this.label = label;
-            this.color = color;
-        }
-    }
-
-    // 自分のカテゴリを判定するメソッド
-    public Category getCategory() {
-        String n = this.name();
-        if (n.startsWith("ACT_")) return Category.ACTION;
-        if (n.startsWith("ATTRIB_")) return Category.ATTRIBUTE;
-        if (n.startsWith("MOD_")) return Category.MODIFIER;
-        return Category.OTHER;
-    }
-
-    // コード風の表示名を取得 (例: ACT_SHOOT -> Action.Shoot())
-    public String getCodeName() {
-        String n = this.name();
-        if (n.startsWith("ACT_")) return "Action." + toPascalCase(n.substring(4)) + "()";
-        if (n.startsWith("ATTRIB_")) return "Attrib." + toPascalCase(n.substring(7)) + "";
-        if (n.startsWith("MOD_")) return "Mod." + toPascalCase(n.substring(4)) + "()";
-        return n;
-    }
-
-    private String toPascalCase(String s) {
-        return s.charAt(0) + s.substring(1).toLowerCase();
-    }
+    public enum Category { ACTION, ATTRIBUTE, MODIFIER, OTHER }
+    public Category getCategory() { return Category.OTHER; } // 簡易実装
+    public String getCodeName() { return this.name(); }
 }

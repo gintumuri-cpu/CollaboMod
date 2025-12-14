@@ -118,6 +118,32 @@ public class GeometryHelper {
         }
     }
 
+    public static void drawCylinder(PoseStack poseStack, VertexConsumer builder, float radius, float height, Vector3f color, float alpha, float time) {
+        Matrix4f pose = poseStack.last().pose();
+        Matrix3f normal = poseStack.last().normal();
+        int segments = 16;
+
+        for (int i = 0; i < segments; i++) {
+            double angle1 = 2 * Math.PI * i / segments;
+            double angle2 = 2 * Math.PI * (i + 1) / segments;
+
+            float x1 = (float) Math.cos(angle1) * radius;
+            float z1 = (float) Math.sin(angle1) * radius;
+            float x2 = (float) Math.cos(angle2) * radius;
+            float z2 = (float) Math.sin(angle2) * radius;
+
+            // 側面 (Bottom to Top)
+            // UVスクロールでエネルギーが昇る演出
+            float v0 = time * 0.1F;
+            float v1 = v0 + 1.0F;
+
+            addVertex(builder, pose, normal, x1, 0, z1, 0, v1, color, alpha);
+            addVertex(builder, pose, normal, x2, 0, z2, 1, v1, color, alpha);
+            addVertex(builder, pose, normal, x2, height, z2, 1, v0, color, 0.0F); // 上端は透明にフェード
+            addVertex(builder, pose, normal, x1, height, z1, 0, v0, color, 0.0F);
+        }
+    }
+
     private static void addVertex(VertexConsumer builder, Matrix4f pose, Matrix3f normal, double x, double y, double z, float u, float v, Vector3f c, float a) {
         builder.vertex(pose, (float)x, (float)y, (float)z)
                 .color(c.x(), c.y(), c.z(), a)

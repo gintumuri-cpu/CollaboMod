@@ -5,12 +5,21 @@ import net.minecraft.nbt.CompoundTag;
 
 public class VisualMetadata {
     public EnumMagicShape shape = EnumMagicShape.RING;
+    public EnumMagicAnchor anchorType = EnumMagicAnchor.WORLD_FIXED; // ■ 追加: アンカータイプ
+
     public int priority = 0;
     public Vector3f mainColor = new Vector3f(1.0F, 1.0F, 1.0F);
     public Vector3f subColor = new Vector3f(0.0F, 0.5F, 1.0F);
+
     public float scale = 1.0F;
     public float density = 1.0F;
     public float rotationSpeed = 1.0F;
+
+    // ■ 追加: プロシージャル生成用パラメータ
+    public boolean isWavy = false;       // 振動属性など (波打つ)
+    public boolean isSpiky = false;      // 拡散・攻撃など (トゲトゲ)
+    public int layerCount = 1;           // レイヤー数 (威力に応じて増加)
+
     public boolean hasLightning = false;
     public boolean isSolid = false;
     public String rendererID = "default";
@@ -22,12 +31,6 @@ public class VisualMetadata {
         this.priority = priority;
         this.mainColor = color;
         this.scale = scale;
-        // IDから形状を推測（簡易互換）
-        if (rendererID.equals("material_burst") || rendererID.equals("explosion_sphere")) {
-            this.shape = EnumMagicShape.SPHERE;
-        } else {
-            this.shape = EnumMagicShape.RING;
-        }
     }
 
     public void merge(VisualMetadata other) {
@@ -37,39 +40,43 @@ public class VisualMetadata {
             this.priority = other.priority;
             this.scale = other.scale;
             this.hasLightning = other.hasLightning;
+            // 新規パラメータのマージ
+            this.anchorType = other.anchorType;
+            this.isWavy = other.isWavy || this.isWavy;
+            this.isSpiky = other.isSpiky || this.isSpiky;
+            this.layerCount = Math.max(this.layerCount, other.layerCount);
         }
         this.mainColor.add(other.mainColor);
         this.mainColor.mul(0.5F);
-        this.subColor.add(other.subColor);
-        this.subColor.mul(0.5F);
     }
 
     public CompoundTag toNBT() {
         CompoundTag tag = new CompoundTag();
         tag.putString("RendererID", rendererID);
         tag.putInt("Shape", shape.ordinal());
+        tag.putInt("Anchor", anchorType.ordinal()); // 保存
         tag.putFloat("ColorR", mainColor.x());
         tag.putFloat("ColorG", mainColor.y());
         tag.putFloat("ColorB", mainColor.z());
         tag.putFloat("Scale", scale);
-        tag.putBoolean("Lightning", hasLightning);
+        tag.putBoolean("IsWavy", isWavy);
+        tag.putBoolean("IsSpiky", isSpiky);
+        tag.putInt("Layers", layerCount);
         return tag;
     }
 
-    // ■■■ 追加: NBTからの読み込み ■■■
     public static VisualMetadata fromNBT(CompoundTag tag) {
         VisualMetadata meta = new VisualMetadata();
         if (tag.contains("RendererID")) meta.rendererID = tag.getString("RendererID");
         if (tag.contains("Shape")) meta.shape = EnumMagicShape.values()[tag.getInt("Shape")];
+        if (tag.contains("Anchor")) meta.anchorType = EnumMagicAnchor.values()[tag.getInt("Anchor")];
         if (tag.contains("ColorR")) {
-            meta.mainColor = new Vector3f(
-                    tag.getFloat("ColorR"),
-                    tag.getFloat("ColorG"),
-                    tag.getFloat("ColorB")
-            );
+            meta.mainColor = new Vector3f(tag.getFloat("ColorR"), tag.getFloat("ColorG"), tag.getFloat("ColorB"));
         }
         if (tag.contains("Scale")) meta.scale = tag.getFloat("Scale");
-        if (tag.contains("Lightning")) meta.hasLightning = tag.getBoolean("Lightning");
+        if (tag.contains("IsWavy")) meta.isWavy = tag.getBoolean("IsWavy");
+        if (tag.contains("IsSpiky")) meta.isSpiky = tag.getBoolean("IsSpiky");
+        if (tag.contains("Layers")) meta.layerCount = tag.getInt("Layers");
         return meta;
     }
 }
