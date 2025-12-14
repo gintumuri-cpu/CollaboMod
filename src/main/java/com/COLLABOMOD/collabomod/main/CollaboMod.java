@@ -37,6 +37,7 @@ public class CollaboMod {
         EntityRegister.register(eventBus);
         BlockEntityRegister.register(eventBus);
         MenuTypeRegister.register(eventBus);
+        ParticleRegister.register(eventBus);
 
     }
 

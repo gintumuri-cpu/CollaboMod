@@ -4,8 +4,6 @@ import com.COLLABOMOD.collabomod.client.util.GeometryHelper;
 import com.COLLABOMOD.collabomod.entity.EntitySciencePhenomenon;
 import com.COLLABOMOD.collabomod.magic.EnumMagicShape;
 import com.COLLABOMOD.collabomod.magic.VisualMetadata;
-import com.COLLABOMOD.collabomod.science.PhenomenonType;
-
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Vector3f;
@@ -32,43 +30,44 @@ public class RenderUniversalMagic extends EntityRenderer<EntitySciencePhenomenon
     public void render(EntitySciencePhenomenon entity, float entityYaw, float partialTicks, PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
         super.render(entity, entityYaw, partialTicks, poseStack, buffer, packedLight);
 
-        VisualMetadata meta = entity.getVisualMetadata(); // 自動計算されたメタデータ
-        Vector3f color = entity.getColor();
-        float radius = entity.getRadius();
+        VisualMetadata meta = entity.getVisualMetadata();
         float time = entity.tickCount + partialTicks;
         float progress = Math.min(1.0F, time / 20.0F);
 
         poseStack.pushPose();
-
-        // 向き合わせ
-        poseStack.mulPose(Vector3f.YP.rotationDegrees(-entity.getYRot()));
-        poseStack.mulPose(Vector3f.XP.rotationDegrees(entity.getXRot()));
+        // 回転アニメーション (パラメータで速度制御)
+        float rotSpeed = meta.rotationSpeed * time;
+        poseStack.mulPose(Vector3f.YP.rotationDegrees(-entity.getYRot() + rotSpeed));
+        poseStack.mulPose(Vector3f.XP.rotationDegrees(entity.getXRot() + rotSpeed * 0.5f));
 
         VertexConsumer builder = buffer.getBuffer(RenderType.lightning());
 
-        if (meta.shape == EnumMagicShape.SPHERE) {
-            float baseScale = radius * 1.1F * progress;
-            if (meta.rendererID.equals("material_burst")) {
-                GeometryHelper.drawSphere(poseStack, builder, baseScale * 0.5F, new Vector3f(1,1,1), 0.9F, time * 0.2F);
-                GeometryHelper.drawSphere(poseStack, builder, baseScale, color, 0.6F, -time * 0.1F);
-            } else {
-                GeometryHelper.drawSphere(poseStack, builder, baseScale, color, 0.5F, time * 0.1F);
-            }
-        }
-        // ■ 追加: 円柱 (火柱)
-        else if (meta.shape == EnumMagicShape.CYLINDER) {
-            // 半径は少し小さめ、高さは半径の4倍程度
-            float r = radius * 0.8F * progress;
-            float h = radius * 4.0F * progress;
+        // ■ 変更: プロシージャル描画の呼び出し
+        // Shape Enum を int 型IDに変換 (0:Sphere, 1:Cylinder, 2:Ring)
+        int shapeType = 0;
+        if (meta.shape == EnumMagicShape.CYLINDER || meta.shape == EnumMagicShape.BEAM) shapeType = 1;
+        else if (meta.shape == EnumMagicShape.RING || meta.shape == EnumMagicShape.RIPPLE) shapeType = 2;
 
-            // コア（白）
-            GeometryHelper.drawCylinder(poseStack, builder, r * 0.5F, h, new Vector3f(1,1,1), 0.8F, time * 0.5F);
-            // 外側（炎の色）
-            GeometryHelper.drawCylinder(poseStack, builder, r, h * 0.9F, color, 0.5F, time * 0.2F);
-        }
-        else {
-            float scale = 1.5F * progress;
-            GeometryHelper.drawRing(poseStack, builder, scale, 0.1F, color, 0.8F, time * 2.0F);
+        // 1. メインレイヤー描画
+        GeometryHelper.drawProceduralMesh(poseStack, builder, meta, shapeType, time, 0.6F * progress);
+
+        // 2. 複層レイヤー描画 (AIが layerCount を増やしていれば実行)
+        if (meta.layerCount > 1) {
+            for (int i = 1; i < meta.layerCount; i++) {
+                float scaleMult = 1.0f + (i * 0.3f); // 外側に広げる
+                float speedMult = (i % 2 == 0) ? 1.0f : -1.0f; // 偶数奇数で逆回転
+
+                // メタデータを一時的にコピーしていじるのはコストが高いので、
+                // GeometryHelper側で対応するのが理想だが、今回は簡易的にscaleだけ操作して呼ぶ
+                VisualMetadata layerMeta = new VisualMetadata(); // 簡易コピー
+                layerMeta.shape = meta.shape;
+                layerMeta.mainColor = meta.subColor; // 2層目はサブカラー
+                layerMeta.scale = meta.scale * scaleMult;
+                layerMeta.isSpiky = meta.isSpiky;
+                layerMeta.isWavy = meta.isWavy;
+
+                GeometryHelper.drawProceduralMesh(poseStack, builder, layerMeta, shapeType, time * speedMult, 0.3F * progress);
+            }
         }
 
         poseStack.popPose();

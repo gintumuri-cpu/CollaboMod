@@ -21,6 +21,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkHooks;
+import java.util.Random;
 
 public class EntitySciencePhenomenon extends Entity {
     // 同期データ
@@ -40,8 +41,8 @@ public class EntitySciencePhenomenon extends Entity {
 
     // 現象タイプ (Ordinal値で保存)
     private static final EntityDataAccessor<Integer> PHENOMENON_TYPE = SynchedEntityData.defineId(EntitySciencePhenomenon.class, EntityDataSerializers.INT);
-
     private static final EntityDataAccessor<Integer> CASTER_ID = SynchedEntityData.defineId(EntitySciencePhenomenon.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> VISUAL_SEED = SynchedEntityData.defineId(EntitySciencePhenomenon.class, EntityDataSerializers.INT);
 
     // ローカル変数
     private float maxRadius = 50.0F;
@@ -82,6 +83,7 @@ public class EntitySciencePhenomenon extends Entity {
         if (caster != null) {
             this.entityData.set(CASTER_ID, caster.getId());
         }
+        this.entityData.set(VISUAL_SEED, new Random().nextInt());
     }
 
     @Override
@@ -97,6 +99,7 @@ public class EntitySciencePhenomenon extends Entity {
         this.entityData.define(COMP_SHIELD, 0.0F);
         this.entityData.define(PHENOMENON_TYPE, PhenomenonType.SPHERE_EXPANSION.ordinal());
         this.entityData.define(CASTER_ID, -1);
+        this.entityData.define(VISUAL_SEED, 0);
     }
 
     // Getter
@@ -104,6 +107,7 @@ public class EntitySciencePhenomenon extends Entity {
     public float getEnergy() { return this.entityData.get(CURRENT_ENERGY); }
     public float getAlpha() { return this.entityData.get(CURRENT_ALPHA); }
     public PhenomenonType getPhenomenonType() {return PhenomenonType.values()[this.entityData.get(PHENOMENON_TYPE)];}
+    public int getVisualSeed() { return this.entityData.get(VISUAL_SEED); }
 
     // ビジュアル情報の取得
     public VisualMetadata getVisualMetadata() {
@@ -114,7 +118,9 @@ public class EntitySciencePhenomenon extends Entity {
         ctx.compWave = this.entityData.get(COMP_WAVE);
         ctx.compShield = this.entityData.get(COMP_SHIELD);
         ctx.temperature = this.entityData.get(TEMPERATURE);
-        ctx.type = getPhenomenonType(); // 保存されたタイプを使用
+        ctx.type = getPhenomenonType();
+        int seed = getVisualSeed();
+        ScienceEngine.simulateVisuals(ctx, seed);
 
         ScienceEngine.simulateVisuals(ctx);
         return ctx.visuals;

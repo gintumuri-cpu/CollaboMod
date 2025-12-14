@@ -16,6 +16,7 @@ public class ItemRegister {
     public static final RegistryObject<Item> SILVER_HORN = ITEMS.register("silver_horn", ItemSilverHorn::new);
     public static final RegistryObject<Item> THIRD_EYE = ITEMS.register("third_eye", ItemThirdEye::new);
     public static final RegistryObject<Item> EMPTY_CAD = ITEMS.register("empty_cad", ItemEmptyCAD::new);
+    public static final RegistryObject<Item> EVALUATOR = ITEMS.register("evaluator", ItemEvaluator::new);
 
 //    public static final RegistryObject<Item> COMP_AIR_BULLET = ITEMS.register("comp_air_bullet",
 //            () -> new ItemSpellComponent(com.COLLABOMOD.collabomod.magic.MagicComponentType.PROJECTILE_AIR));
