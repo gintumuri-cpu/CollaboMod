@@ -1,5 +1,7 @@
 package com.COLLABOMOD.collabomod.learning;
 
+import com.COLLABOMOD.collabomod.magic.PhysicsMetadata;
+import com.COLLABOMOD.collabomod.magic.VisualMetadata;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken; // 追加
@@ -21,13 +23,14 @@ public class CardinalLearningManager {
     private static final CardinalLearningManager INSTANCE = new CardinalLearningManager();
     private final List<LearningData> dataset = new ArrayList<>();
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
-    private final Path savePath;
-
+    private final Path preferencePath;
+    private AttributePreference globalPreference;
     private LearningData pendingData = null;
 
     private CardinalLearningManager() {
-        this.savePath = FMLPaths.CONFIGDIR.get().resolve("collabomod_training_data.json");
-        load();
+        // 保存先：config/collabomod_brain.json
+        this.preferencePath = FMLPaths.CONFIGDIR.get().resolve("collabomod_brain.json");
+        loadBrain();
     }
 
     public static CardinalLearningManager getInstance() {
@@ -37,12 +40,17 @@ public class CardinalLearningManager {
     public void registerInteraction(LearningData data) {
         this.pendingData = data;
     }
+    // 脳へアクセスするメソッド
+    public AttributePreference getBrain() {
+        return globalPreference;
+    }
 
     public void rateLastInteraction(float score) {
         if (pendingData != null) {
             pendingData.developerScore = score;
             dataset.add(pendingData);
-            save();
+            globalPreference.train(pendingData.attributeVector, pendingData.visualSettings, score);
+            saveBrain();
             System.out.println("[Cardinal AI] Data saved. Score: " + score + ", Total Data: " + dataset.size());
             pendingData = null;
         } else {
@@ -50,54 +58,66 @@ public class CardinalLearningManager {
         }
     }
 
-    // ■ 追加: k-近傍法検索 (似ている正解データを探す)
-    public List<LearningData> findNearestNeighbors(float[] queryVector, int k) {
-        // スコアが 0.0 より大きい（2点以上）のデータのみを「正解候補」とする
-        // 1点 (-1.0) は「禁忌」として、ここでは検索対象に含めない（将来的に「避ける」学習に使う）
-        List<LearningData> goodExamples = dataset.stream()
-                .filter(d -> d.developerScore > 0.0f)
-                .collect(Collectors.toList());
+    /**
+     * 魔法の実行結果を記録し、自己評価を行う
+     * @param attributeVector 属性ベクトル
+     * @param phy 物理メタデータ
+     * @param vis 視覚メタデータ
+     * @param score 一貫性スコア
+     */
+    public void recordExperience(float[] attributeVector, PhysicsMetadata phy, VisualMetadata vis, float score) {
+        if (attributeVector == null || phy == null || vis == null) return;
 
-        if (goodExamples.isEmpty()) return new ArrayList<>();
+        // 学習データを生成
+        LearningData data = new LearningData();
+        data.attributeVector = attributeVector;
+        // VisualSettingsに変換する必要があるが、ここでは簡易的にVisualMetadataをそのまま使う
+        // 本来はVisualMetadataから色や形状などの設定を抽出してVisualSettingsに詰める
+        data.visualSettings = new VisualSettings(vis.mainColor, vis.shape, vis.animationType);
+        data.consistencyScore = score;
 
-        // 類似度ソート
-        goodExamples.sort(Comparator.comparingDouble(d -> distance(d.attributeVector, queryVector)));
-
-        return goodExamples.subList(0, Math.min(k, goodExamples.size()));
+        // 自己評価を実行
+        selfEvaluate(data, score);
     }
 
-    // ユークリッド距離の計算
-    private double distance(float[] v1, float[] v2) {
-        double sum = 0.0;
-        for (int i = 0; i < Math.min(v1.length, v2.length); i++) {
-            double diff = v1[i] - v2[i];
-            sum += diff * diff;
-        }
-        return Math.sqrt(sum);
+    /**
+     * AIによる自己評価を実行する。
+     * 物理現象と描画の一貫性スコアに基づいて、弱い学習信号を脳に送る。
+     * @param data 学習対象のデータ
+     * @param consistencyScore -1.0 ~ 1.0 の一貫性スコア
+     */
+    public void selfEvaluate(LearningData data, float consistencyScore) {
+        if (data == null) return;
+
+        // 自己評価の学習率はプレイヤー評価より低く設定 (例: 0.2倍)
+        // これにより、プレイヤーの評価を優先しつつ、AIが自律的に微調整を行う
+        float learningSignal = consistencyScore * 0.2f;
+        globalPreference.train(data.attributeVector, data.visualSettings, learningSignal);
+        saveBrain(); // 自己学習でも脳を保存
     }
 
-    private void save() {
-        try (FileWriter writer = new FileWriter(savePath.toFile())) {
-            gson.toJson(dataset, writer);
+
+    private void saveBrain() {
+        try (FileWriter writer = new FileWriter(preferencePath.toFile())) {
+            gson.toJson(globalPreference, writer);
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private void load() {
-        File file = savePath.toFile();
+    private void loadBrain() {
+        File file = preferencePath.toFile();
         if (file.exists()) {
             try (FileReader reader = new FileReader(file)) {
-                // ■ 修正: List<LearningData> 型として正しく読み込む
-                Type listType = new TypeToken<ArrayList<LearningData>>(){}.getType();
-                List<LearningData> loaded = gson.fromJson(reader, listType);
-                if (loaded != null) {
-                    dataset.addAll(loaded);
-                    System.out.println("[Cardinal AI] Loaded " + dataset.size() + " training samples.");
-                }
+                globalPreference = gson.fromJson(reader, AttributePreference.class);
             } catch (IOException e) {
                 e.printStackTrace();
             }
+        }
+
+        // ファイルがない、または読み込み失敗時は新規作成
+        if (globalPreference == null) {
+            globalPreference = new AttributePreference();
         }
     }
 }

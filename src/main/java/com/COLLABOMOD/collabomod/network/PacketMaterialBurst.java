@@ -51,12 +51,12 @@ public class PacketMaterialBurst {
                     ScienceContext burstCtx = ScienceContext.createStrategicClass();
 
                     // ■ 修正: 爆発ではなく、破壊エネルギー体を設置する
-                    EntitySciencePhenomenon burst = new EntitySciencePhenomenon(
-                            level,
-                            Vec3.atCenterOf(targetPos), // BlockPos -> Vec3
-                            burstCtx,
-                            player
-                    );
+//                    EntitySciencePhenomenon burst = new EntitySciencePhenomenon(
+//                            level,
+//                            Vec3.atCenterOf(targetPos), // BlockPos -> Vec3
+//                            burstCtx,
+//                            player
+//                    );
 
                     // 音: 変換開始の音（雷）
                     level.playSound(null, targetPos, SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.WEATHER, 100.0F, 0.5F);

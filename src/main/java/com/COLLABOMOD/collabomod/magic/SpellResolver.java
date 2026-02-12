@@ -1,107 +1,44 @@
 package com.COLLABOMOD.collabomod.magic;
 
-//import com.COLLABOMOD.collabomod.science.ScienceEngine; // 科学エンジンを使用
-//import java.util.List;
-//
-//public class SpellResolver {
-//
-//    // 見た目の解決
-//    public static VisualMetadata resolveVisuals(List<MagicComponentType> components) {
-//        // 1. ダミー設計図を作成
-//        SpellContext ctx = new SpellContext();
-//
-//        // 2. 適用
-//        for (MagicComponentType comp : components) {
-//            comp.apply(ctx);
-//        }
-//
-//        // 3. 科学エンジンで見た目を自動生成 (パラメータから色などを決定)
-//        ScienceEngine.simulateVisuals(ctx.science);
-//
-//        // 4. 強制的な見た目指定（Material Burstなど）があればマージ
-//        for (MagicComponentType comp : components) {
-//            ctx.science.visuals.merge(comp.visuals);
-//        }
-//
-//        return ctx.science.visuals;
-//    }
-//
-//    // ■ 修正: コスト計算をシミュレーションベースに変更
-//    public static int calculateTotalCost(List<MagicComponentType> components) {
-//        // ダミー設計図を作成
-//        SpellContext ctx = new SpellContext();
-//
-//        // 全コンポーネントを適用
-//        for (MagicComponentType comp : components) {
-//            comp.apply(ctx); // これにより ctx.cost が加算・乗算される
-//        }
-//
-//        return ctx.cost;
-//    }
-//
-//    // キャスト時間の計算
-//    public static int calculateCastTime(List<MagicComponentType> components) {
-//        SpellContext ctx = new SpellContext();
-//        for (MagicComponentType comp : components) {
-//            comp.apply(ctx); // これにより ctx.castTime が加算される
-//        }
-//        return ctx.castTime;
-//    }
-//}
-
-
-//教師データ作成用↓
 import com.COLLABOMOD.collabomod.learning.AnalysisEngine;
-import com.COLLABOMOD.collabomod.learning.LearningData;
-import com.COLLABOMOD.collabomod.science.ScienceEngine;
-import java.util.List;
+
 import java.util.ArrayList;
+import java.util.List;
 
 public class SpellResolver {
 
-    public static VisualMetadata resolveVisuals(List<MagicComponentType> components, List<String> scriptCode) {
+    /**
+     * 【新】スクリプトから魔法のコンテキスト（物理・視覚含む）を完全解決する。
+     * これが二段階推論フローの本体となる。
+     */
+    public static SpellContext resolve(List<String> scriptCode) {
         SpellContext ctx = new SpellContext();
 
-        // 1. 物理演算
-        for (MagicComponentType comp : components) {
-            comp.apply(ctx);
-        }
-        ScienceEngine.simulateVisuals(ctx.science);
+        // スクリプトのセット（null安全）
+        ctx.script = scriptCode != null ? scriptCode : new ArrayList<>();
+        long seed = ctx.script.hashCode();
 
-        // 2. AI推論
-        List<String> analysisTarget = scriptCode != null ? scriptCode : new ArrayList<>();
-        if (analysisTarget.isEmpty()) {
-            for(MagicComponentType c : components) analysisTarget.add(c.name());
-        }
+        // --- ステップ1: スクリプトから「属性ベクトル」を抽出 ---
+        // これは魔法全体の雰囲気（色やテーマ）に影響する
+        float[] attributes = AnalysisEngine.analyzeScript(ctx.script);
 
-        float[] attributes = AnalysisEngine.analyzeScript(analysisTarget);
+        // --- ステップ2: スクリプトと属性から「物理現象」を推論 ---
+        // "damage(10)" や "knockback(5)" といったロジックを解釈し、PhysicsMetadataを構築する
+        ctx.physics = AnalysisEngine.derivePhysicsFromScript(ctx.script, attributes);
 
-        long seed = analysisTarget.hashCode();
-        VisualMetadata aiVisuals = AnalysisEngine.deriveVisualsFromAttributes(attributes, seed);
+        // --- ステップ3: 確定した「物理現象」と属性から「描画」を連想 ---
+        // AIに、物理現象に最もふさわしい見た目をデザインさせる
+        ctx.visuals = AnalysisEngine.deriveVisualsFromPhysics(ctx.physics, attributes, seed);
 
-        // 3. 物理統制
-        aiVisuals.scale = ctx.science.visuals.scale;
+        // --- ステップ4: 詠唱時間の設定 ---
+        // 物理現象の複雑さ（エネルギーや質量）に応じて詠唱時間を決定する
+        ctx.castTime = (int) (ctx.physics.energy / 10.0f + ctx.physics.mass);
 
-        return aiVisuals;
+        return ctx;
     }
 
-    public static VisualMetadata resolveVisuals(List<MagicComponentType> components) {
-        return resolveVisuals(components, null);
-    }
-
-    public static int calculateTotalCost(List<MagicComponentType> components) {
-        SpellContext ctx = new SpellContext();
-        for (MagicComponentType comp : components) {
-            comp.apply(ctx);
-        }
-        return ctx.cost;
-    }
-
-    public static int calculateCastTime(List<MagicComponentType> components) {
-        SpellContext ctx = new SpellContext();
-        for (MagicComponentType comp : components) {
-            comp.apply(ctx);
-        }
-        return ctx.castTime;
+    // GUIのプレビューなど、見た目だけ欲しい場合用のヘルパー
+    public static VisualMetadata resolveVisuals(List<String> scriptCode) {
+        return resolve(scriptCode).visuals;
     }
 }

@@ -28,13 +28,12 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
+import javax.annotation.Nullable;
 import java.util.List;
 import java.util.Random;
 
-public class ItemCAD extends Item implements ICAD{
+public class ItemCAD extends Item {
 
     private final Random random = new Random();
 
@@ -42,191 +41,115 @@ public class ItemCAD extends Item implements ICAD{
         super(new Item.Properties().tab(CollaboMod.COLLABOMOD_TAB).stacksTo(1));
     }
 
-    // ツールチップ
-    @Override
-    public void appendHoverText(ItemStack stack, @Nullable Level level, List<net.minecraft.network.chat.Component> tooltip, TooltipFlag flag) {
-        // NBTからスクリプト(文字列リスト)を読み込む
-        List<String> script = getScriptFromNBT(stack);
-
-        if (!script.isEmpty()) {
-            // 最初の行を表示
-            tooltip.add(new TextComponent("§b[Code] " + script.get(0)));
-            if (script.size() > 1) {
-                tooltip.add(new TextComponent("§7...他 " + (script.size() - 1) + " 行"));
-            }
-        } else {
-            tooltip.add(new TextComponent("§7[未設定] 起動式が書き込まれていません"));
-        }
-        super.appendHoverText(stack, level, tooltip, flag);
-    }
-
-    @Override
-    public UseAnim getUseAnimation(ItemStack stack) { return UseAnim.BOW; }
-    @Override
-    public int getUseDuration(ItemStack stack) { return 72000; }
-
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
-        player.startUsingItem(hand);
-        // 起動音
-        level.playSound(null, player.getX(), player.getY(), player.getZ(),
-                SoundEvents.BEACON_ACTIVATE, SoundSource.PLAYERS, 1.0F, 1.0F);
-        return InteractionResultHolder.consume(player.getItemInHand(hand));
-    }
+        ItemStack stack = player.getItemInHand(hand);
 
-    @Override
-    public void onUseTick(Level level, LivingEntity livingEntity, ItemStack stack, int count) {
-        if (livingEntity instanceof Player player) {
-            int duration = this.getUseDuration(stack) - count;
-            if (duration % 4 == 0) {
-                castMagic(level, player, stack);
-            }
+        if (!level.isClientSide) {
+            castMagic(level, player, stack);
+            // 魔法使用時のクールダウンなどを設定する場合はここに記述
+            player.getCooldowns().addCooldown(this, 10);
         }
+
+        return InteractionResultHolder.success(stack);
     }
 
     private void castMagic(Level level, Player player, ItemStack stack) {
-        player.getCapability(MagicStatsProvider.PLAYER_MAGIC_STATS).ifPresent(cadStats -> {
+        // ■ 追加: サイオン消費ロジック
+        player.getCapability(MagicStatsProvider.PLAYER_MAGIC_STATS).ifPresent(stats -> {
+            CompoundTag tag = stack.getOrCreateTag();
+            List<String> script = new ArrayList<>();
 
-            // 1. スクリプト取得
-            List<String> script = getScriptFromNBT(stack);
-
-            // ★デバッグログ: 読み込めたか確認
-            if (!level.isClientSide) {
-                //System.out.println("DEBUG: Casting Magic... Script Lines: " + script.size());
-                if (!script.isEmpty()) {
-                    //System.out.println("DEBUG: Line 1: " + script.get(0));
+            if (tag.contains("Script")) {
+                ListTag list = tag.getList("Script", Tag.TAG_STRING);
+                for (int i = 0; i < list.size(); i++) {
+                    script.add(list.getString(i));
                 }
+            } else {
+                // デフォルトのスクリプト (テスト用)
+                script.add("explode(10)");
+                script.add("fire");
             }
 
-            if (script.isEmpty()) return;
+            // ■ 新フロー: SpellResolver を使ってスクリプトを完全解決する
+            SpellContext ctx = SpellResolver.resolve(script);
 
-            // --- サーバー側の処理 ---
-            if (!level.isClientSide) {
+            // ■ 追加: コスト計算 (簡易)
+            int cost = (int) (ctx.physics.energy + ctx.physics.mass * 5 + ctx.physics.areaOfEffect * 2);
+            if (cost < 5) cost = 5; // 最低コスト
 
-                // コスト計算
-                SpellContext simCtx = MagicScriptEngine.simulate(script);
-                int cost = simCtx.cost;
+            if (stats.getCurrentPsion() >= cost) {
+                // サイオンを消費して魔法を発動
+                stats.setCurrentPsion(stats.getCurrentPsion() - cost);
 
-                //System.out.println("DEBUG: Calculated Cost: " + cost);
+                // 実行に必要な情報を追加
+                ctx.level = level; ctx.caster = player; ctx.origin = player.getEyePosition();
 
-                if (cadStats.getCurrentPsion() >= cost) {
-                    cadStats.setCurrentPsion(cadStats.getCurrentPsion() - cost);
-                    cadStats.addMentalLoad(2);
-
-                    SpellContext ctx = new SpellContext(level, player);
-
-                    // ターゲット取得
-                    EntityHitResult hitResult = getTargetEntityResult(level, player, 30.0D);
-                    if (hitResult != null && hitResult.getEntity() instanceof LivingEntity target) {
-                        ctx.target = target;
-                    }
-
-                    try {
-                        // 実行
-                        //System.out.println("DEBUG: Executing Script...");
-                        MagicScriptEngine.execute(ctx, script);
-                        //System.out.println("DEBUG: Execution Finished.");
-
-                    } catch (MagicScriptEngine.ScriptExecutionException e) {
-                        //System.out.println("DEBUG: Script Error! " + e.getMessage());
-                        handleFizzle(level, player);
-                        player.sendMessage(new TextComponent("§c起動式エラー [行 " + e.line + "]: " + e.getMessage()), Util.NIL_UUID);
-                    }
-
-                } else {
-                    if (player.tickCount % 20 == 0) {
-                        player.sendMessage(new TextComponent("想子不足 (必要: " + cost + ")"), Util.NIL_UUID);
+                // ターゲット取得 (オプション: 視線の先のエンティティやブロックをターゲットにする場合)
+                HitResult result = getRayTraceResult(level, player, 20.0);
+                if (result.getType() == HitResult.Type.ENTITY) {
+                    EntityHitResult entityResult = (EntityHitResult) result;
+                    if (entityResult.getEntity() instanceof LivingEntity) {
+                        ctx.target = (LivingEntity) entityResult.getEntity();
                     }
                 }
-            }
 
-            // --- クライアント側の処理 ---
-            if (level.isClientSide) {
-                SpellContext simCtx = MagicScriptEngine.simulate(script);
-                if (cadStats.getCurrentPsion() >= simCtx.cost) {
-                    Vec3 look = player.getLookAngle();
-                    Vec3 muzzlePos = player.getEyePosition().add(look.scale(0.8));
-                    PsionParticleUtil.spawnPsionRing(level, muzzlePos, look, 0.2F, 10);
-                }
+                // 実行
+                SpellExecutor.execute(ctx);
+
+                // フィードバック (デバッグ用)
+                player.sendMessage(new TextComponent("Magic Executed! (Cost: " + cost + ")"), Util.NIL_UUID);
+
+            } else {
+                // サイオン不足
+                player.sendMessage(new TextComponent("§c想子(サイオン)不足"), Util.NIL_UUID);
+                level.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.FIRE_EXTINGUISH, SoundSource.PLAYERS, 0.5f, 1.5f);
             }
         });
     }
 
-    // --- Helper Methods ---
-
-    // NBTから文字列リストを取得
-    private List<String> getScriptFromNBT(ItemStack stack) {
-        List<String> script = new ArrayList<>();
-        CompoundTag tag = stack.getOrCreateTag();
-
-        if (tag.contains("ScriptCode", Tag.TAG_LIST)) {
-            ListTag listTag = tag.getList("ScriptCode", Tag.TAG_STRING);
-            for (int i = 0; i < listTag.size(); i++) {
-                script.add(listTag.getString(i));
+    @Override
+    public void appendHoverText(ItemStack stack, @Nullable Level level, List<net.minecraft.network.chat.Component> tooltip, TooltipFlag flag) {
+        if (stack.hasTag() && stack.getTag().contains("Script")) {
+            tooltip.add(new TextComponent("§aScript Loaded"));
+            ListTag list = stack.getTag().getList("Script", Tag.TAG_STRING);
+            for(int i=0; i<Math.min(list.size(), 3); i++) {
+                tooltip.add(new TextComponent("§7" + list.getString(i)));
             }
+            if(list.size() > 3) tooltip.add(new TextComponent("§7..."));
+        } else {
+            tooltip.add(new TextComponent("§cNo Script"));
         }
-        return script;
     }
 
-    private List<MagicComponentType> getInstalledComponents(ItemStack stack) {
-        List<MagicComponentType> list = new ArrayList<>();
-        CompoundTag tag = stack.getOrCreateTag();
-
-        if (tag.contains("Components", Tag.TAG_LIST)) {
-            ListTag tagList = tag.getList("Components", Tag.TAG_STRING);
-            for (int i = 0; i < tagList.size(); i++) {
-                try {
-                    list.add(MagicComponentType.valueOf(tagList.getString(i)));
-                } catch (Exception ignored) {}
-            }
-        }
-        // ■ 修正: elseブロック（デフォルトでエアバレット追加）を削除しました
-        // これで NBT がない時は size 0 のリストが返ります
-
-        return list;
-    }
-
-    private EntityHitResult getTargetEntityResult(Level level, Player player, double range) {
+    // レイキャスト用ヘルパー
+    private HitResult getRayTraceResult(Level level, Player player, double range) {
         Vec3 eyePos = player.getEyePosition();
-        Vec3 look = player.getLookAngle();
-        Vec3 endPos = eyePos.add(look.scale(range));
-        AABB searchBox = player.getBoundingBox().expandTowards(look.scale(range)).inflate(1.0D);
-        return ProjectileUtil.getEntityHitResult(
-                level, player, eyePos, endPos, searchBox, (e) -> !e.isSpectator() && e.isPickable());
-    }
+        Vec3 lookVec = player.getLookAngle();
+        Vec3 endPos = eyePos.add(lookVec.scale(range));
 
-    private Vec3 getTargetPosition(Level level, Player player, double range) {
-        EntityHitResult entityResult = getTargetEntityResult(level, player, range);
+        // まずエンティティ判定
+        AABB searchBox = player.getBoundingBox().expandTowards(lookVec.scale(range)).inflate(1.0D);
+        EntityHitResult entityResult = ProjectileUtil.getEntityHitResult(
+                level, player, eyePos, endPos, searchBox, (e) -> !e.isSpectator() && e.isPickable()
+        );
+
         if (entityResult != null) {
-            LivingEntity target = (LivingEntity) entityResult.getEntity();
-            return target.position().add(0, target.getBbHeight() / 2.0, 0);
+            return entityResult;
         }
-        HitResult blockResult = player.pick(range, 0.0F, false);
-        return blockResult.getLocation();
+
+        // なければブロック判定
+        return player.pick(range, 0.0F, false);
     }
 
-    private Vec3 getRandomSpawnPos(Vec3 targetPos) {
-        double angle = random.nextDouble() * Math.PI * 2;
-        double dist = 3.0 + random.nextDouble() * 2.0;
-        double heightOffset = (random.nextDouble() - 0.5) * 4.0;
-        return targetPos.add(Math.cos(angle) * dist, heightOffset + 2.0, Math.sin(angle) * dist);
+    // アニメーション (手に持った時の動き)
+    @Override
+    public UseAnim getUseAnimation(ItemStack stack) {
+        return UseAnim.BOW;
     }
 
-    private void lookAt(EntityMagicSequence sequence, Vec3 target) {
-        double dX = target.x - sequence.getX();
-        double dY = target.y - sequence.getY();
-        double dZ = target.z - sequence.getZ();
-        double dist2d = Math.sqrt(dX * dX + dZ * dZ);
-        float yaw = (float) (Math.atan2(dZ, dX) * (180 / Math.PI)) - 90.0F;
-        float pitch = (float) -(Math.atan2(dY, dist2d) * (180 / Math.PI));
-        sequence.setYRot(yaw);
-        sequence.setXRot(pitch);
-    }
-
-    private void handleFizzle(Level level, Player player) {
-        level.playSound(null, player.getX(), player.getY(), player.getZ(),
-                SoundEvents.GENERIC_EXTINGUISH_FIRE, SoundSource.PLAYERS, 1.0F, 1.0F);
-        player.hurt(net.minecraft.world.damagesource.DamageSource.MAGIC, 2.0F);
-        player.sendMessage(new TextComponent("§c演算領域オーバーヒート！"), Util.NIL_UUID);
+    @Override
+    public int getUseDuration(ItemStack stack) {
+        return 72000;
     }
 }

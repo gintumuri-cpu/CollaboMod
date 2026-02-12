@@ -20,11 +20,11 @@ public class NetworkHandler {
                 PacketSyncMagicStats::encode,
                 PacketSyncMagicStats::new,
                 PacketSyncMagicStats::handle);
-        INSTANCE.registerMessage(id++,
-                PacketMaterialBurst.class,
-                PacketMaterialBurst::toBytes,
-                PacketMaterialBurst::new,
-                PacketMaterialBurst::handle);
+//        INSTANCE.registerMessage(id++,
+//                PacketMaterialBurst.class,
+//                PacketMaterialBurst::toBytes,
+//                PacketMaterialBurst::new,
+//                PacketMaterialBurst::handle);
         INSTANCE.registerMessage(id++,
                 PacketEditCAD.class,
                 PacketEditCAD::toBytes,

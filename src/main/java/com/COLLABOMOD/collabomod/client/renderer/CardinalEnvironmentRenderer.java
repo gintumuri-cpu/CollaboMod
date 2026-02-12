@@ -1,6 +1,8 @@
 package com.COLLABOMOD.collabomod.client.renderer;
 
 import com.COLLABOMOD.collabomod.client.ClientCardinalSystem;
+import com.COLLABOMOD.collabomod.capability.MagicCapabilityEvents;
+import com.COLLABOMOD.collabomod.capability.MagicStatsProvider;
 import com.COLLABOMOD.collabomod.main.CollaboMod;
 import com.COLLABOMOD.collabomod.register.ParticleRegister; // 追加
 import com.COLLABOMOD.collabomod.world.cardinal.EnvironmentChunkData;
@@ -23,54 +25,54 @@ public class CardinalEnvironmentRenderer {
     private static final Random random = new Random();
     private static final int VISUAL_RANGE = 24;
 
-    @SubscribeEvent
-    public static void onClientTick(TickEvent.ClientTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) return;
-
-        Minecraft mc = Minecraft.getInstance();
-        Level level = mc.level;
-        if (level == null || mc.player == null || mc.isPaused()) return;
-
-        BlockPos playerPos = mc.player.blockPosition();
-        Map<Long, EnvironmentChunkData> allData = ClientCardinalSystem.getAllData();
-
-        allData.forEach((chunkKey, data) -> {
-            ChunkPos chunkPos = new ChunkPos(chunkKey);
-            BlockPos chunkCenter = chunkPos.getMiddleBlockPosition(0);
-            if (chunkCenter.distSqr(playerPos) > (VISUAL_RANGE + 16) * (VISUAL_RANGE + 16)) return;
-
-            // 1. 温度
-            data.getAllTemperatures().forEach((localKey, temp) -> {
-                if (Math.abs(temp - 300.0F) < 50.0F) return;
-
-                float chance = (Math.abs(temp - 300.0F) / 5000.0F); // 確率調整
-                if (random.nextFloat() > chance) return;
-
-                BlockPos targetPos = restoreWorldPos(chunkPos, localKey);
-                if (targetPos.distSqr(playerPos) > VISUAL_RANGE * VISUAL_RANGE) return;
-
-                Vector3f color;
-                if (temp > 300.0F) {
-                    color = new Vector3f(1.0F, 0.3F, 0.1F); // 熱: オレンジ
-                } else {
-                    color = new Vector3f(0.5F, 0.8F, 1.0F); // 冷: 水色
-                }
-                spawnParticle(level, targetPos, color);
-            });
-
-            // 2. サイオン
-            data.getAllPsionDensities().forEach((localKey, density) -> {
-                if (density <= 100.0F) return;
-                float chance = (density - 100.0F) / 1000.0F;
-                if (random.nextFloat() > chance) return;
-
-                BlockPos targetPos = restoreWorldPos(chunkPos, localKey);
-                if (targetPos.distSqr(playerPos) > VISUAL_RANGE * VISUAL_RANGE) return;
-
-                spawnParticle(level, targetPos, new Vector3f(0.0F, 1.0F, 0.8F)); // サイオン: シアン
-            });
-        });
-    }
+//    @SubscribeEvent
+//    public static void onClientTick(TickEvent.ClientTickEvent event) {
+//        if (event.phase != TickEvent.Phase.END) return;
+//
+//        Minecraft mc = Minecraft.getInstance();
+//        Level level = mc.level;
+//        if (level == null || mc.player == null || mc.isPaused()) return;
+//
+//        BlockPos playerPos = mc.player.blockPosition();
+//        Map<Long, EnvironmentChunkData> allData = ClientCardinalSystem.getAllData();
+//
+//        allData.forEach((chunkKey, data) -> {
+//            ChunkPos chunkPos = new ChunkPos(chunkKey);
+//            BlockPos chunkCenter = chunkPos.getMiddleBlockPosition(0);
+//            if (chunkCenter.distSqr(playerPos) > (VISUAL_RANGE + 16) * (VISUAL_RANGE + 16)) return;
+//
+//            // 1. 温度
+//            data.getAllTemperatures().forEach((localKey, temp) -> {
+//                if (Math.abs(temp - 300.0F) < 50.0F) return;
+//
+//                float chance = (Math.abs(temp - 300.0F) / 5000.0F); // 確率調整
+//                if (random.nextFloat() > chance) return;
+//
+//                BlockPos targetPos = restoreWorldPos(chunkPos, localKey);
+//                if (targetPos.distSqr(playerPos) > VISUAL_RANGE * VISUAL_RANGE) return;
+//
+//                Vector3f color;
+//                if (temp > 300.0F) {
+//                    color = new Vector3f(1.0F, 0.3F, 0.1F); // 熱: オレンジ
+//                } else {
+//                    color = new Vector3f(0.5F, 0.8F, 1.0F); // 冷: 水色
+//                }
+//                spawnParticle(level, targetPos, color);
+//            });
+//
+//            // 2. サイオン
+//            data.getAllPsionDensities().forEach((localKey, density) -> {
+//                if (density <= 100.0F) return;
+//                float chance = (density - 100.0F) / 1000.0F;
+//                if (random.nextFloat() > chance) return;
+//
+//                BlockPos targetPos = restoreWorldPos(chunkPos, localKey);
+//                if (targetPos.distSqr(playerPos) > VISUAL_RANGE * VISUAL_RANGE) return;
+//
+//                spawnParticle(level, targetPos, new Vector3f(0.0F, 1.0F, 0.8F)); // サイオン: シアン
+//            });
+//        });
+//    }
 
     private static BlockPos restoreWorldPos(ChunkPos chunkPos, long localKey) {
         BlockPos local = BlockPos.of(localKey);

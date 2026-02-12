@@ -1,0 +1,179 @@
+{
+  "rules": [
+    {
+      "comment": "Inferno (High Heat + Explosion)",
+      "conditions": {
+        "min_attribute_heat": 0.6,
+        "min_temperature": 1000.0,
+        "force_type": "RADIAL",
+        "min_energy": 50.0
+      },
+      "commands": [
+        {
+          "type": "particle",
+          "id": "minecraft:flame",
+          "count": 50
+        },
+        {
+          "type": "particle",
+          "id": "minecraft:lava",
+          "count": 10
+        },
+        {
+          "type": "sound",
+          "id": "minecraft:entity.generic.explode",
+          "volume": 2.0,
+          "pitch": 0.8
+        },
+        {
+          "type": "mesh",
+          "shape": "SPHERE",
+          "anim": "EXPAND_FADE",
+          "scale": 3.0,
+          "duration": 1.0,
+          "r": 1.0,
+          "g": 0.2,
+          "b": 0.0
+        },
+        {
+          "type": "texture",
+          "tex_type": "NOISE",
+          "color_hex": "FFFF4400"
+        }
+      ]
+    },
+    {
+      "comment": "Blizzard (Cold + Wind)",
+      "conditions": {
+        "min_attribute_cold": 0.6,
+        "max_temperature": 273.0,
+        "min_velocity": 0.2
+      },
+      "commands": [
+        {
+          "type": "particle",
+          "id": "minecraft:snowflake",
+          "count": 20
+        },
+        {
+          "type": "particle",
+          "id": "minecraft:cloud",
+          "count": 10
+        },
+        {
+          "type": "sound",
+          "id": "minecraft:item.elytra.flying",
+          "volume": 1.0,
+          "pitch": 1.5
+        },
+        {
+          "type": "mesh",
+          "shape": "RING",
+          "anim": "SUSTAIN_SPIN",
+          "scale": 2.0,
+          "duration": 2.0,
+          "r": 0.5,
+          "g": 0.8,
+          "b": 1.0
+        },
+        {
+          "type": "texture",
+          "tex_type": "STRIPE",
+          "color_hex": "88FFFFFF"
+        }
+      ]
+    },
+    {
+      "comment": "Divine Ray (Divine + Directional)",
+      "conditions": {
+        "min_attribute_divine": 0.6,
+        "force_type": "DIRECTIONAL"
+      },
+      "commands": [
+        {
+          "type": "particle",
+          "id": "minecraft:end_rod",
+          "count": 10
+        },
+        {
+          "type": "sound",
+          "id": "minecraft:block.amethyst_block.chime",
+          "volume": 1.0,
+          "pitch": 1.2
+        },
+        {
+          "type": "mesh",
+          "shape": "BEAM",
+          "anim": "BEAM_EXTEND",
+          "scale": 1.0,
+          "duration": 0.5,
+          "r": 1.0,
+          "g": 1.0,
+          "b": 0.8
+        },
+        {
+          "type": "texture",
+          "tex_type": "CELL",
+          "color_hex": "FFFFFFFF"
+        }
+      ]
+    },
+    {
+      "comment": "Void Gravity (Entropy + Field)",
+      "conditions": {
+        "min_attribute_entropy": 0.5,
+        "force_type": "FIELD",
+        "min_energy": 30.0
+      },
+      "commands": [
+        {
+          "type": "particle",
+          "id": "minecraft:squid_ink",
+          "count": 15
+        },
+        {
+          "type": "sound",
+          "id": "minecraft:block.beacon.ambient",
+          "volume": 1.0,
+          "pitch": 0.5
+        },
+        {
+          "type": "mesh",
+          "shape": "SPHERE",
+          "anim": "PULSE",
+          "scale": 1.5,
+          "duration": 5.0,
+          "r": 0.2,
+          "g": 0.0,
+          "b": 0.4
+        },
+        {
+          "type": "texture",
+          "tex_type": "NOISE",
+          "color_hex": "AA440088"
+        }
+      ]
+    },
+    {
+      "comment": "Basic Fireball (Fallback)",
+      "conditions": {
+        "min_attribute_heat": 0.5,
+        "min_temperature": 500.0,
+        "force_type": "DIRECTIONAL"
+      },
+      "commands": [
+        {
+          "type": "particle",
+          "id": "minecraft:flame",
+          "count": 5
+        },
+        {
+          "type": "sound",
+          "id": "minecraft:entity.blaze.shoot",
+          "volume": 1.0,
+          "pitch": 1.0
+        }
+      ]
+    }
+  ]
+}

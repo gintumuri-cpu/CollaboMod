@@ -36,20 +36,15 @@ public class ItemEvaluator extends Item {
             }
             // B. 通常右クリック : 評価送信
             else {
-                // スコアを 0.0 ~ 1.0 に正規化して渡す (1点=0.1, 10点=1.0)
-                // ※ 1点などの低評価は「0.1」として記録され、AIへの影響力が極めて小さくなる
-                // もし「二度と出すな」という強い否定をしたい場合は、1点のときだけ -1.0 を送るロジックにしても良い
-
-                float normalizedScore;
-                if (currentScore == 1) {
-                    normalizedScore = -1.0f; // 1点は「完全否定（禁止）」として扱う
-                } else {
-                    normalizedScore = currentScore / 10.0f; // 2~10点は「重み」として扱う
-                }
+                // スコアを -1.0 (1点) から 1.0 (10点) の範囲に正規化する
+                // 5.5点を中間(0.0)とする線形変換
+                float normalizedScore = (currentScore - 5.5f) / 4.5f;
 
                 CardinalLearningManager.getInstance().rateLastInteraction(normalizedScore);
 
-                String msg = (normalizedScore < 0) ? "§c[AI学習] 評価: Bad (除外対象)" : "§a[AI学習] 評価: " + currentScore + "点 で記録";
+                String msg = (currentScore <= 2) ? "§c[AI学習] 評価: Bad (" + currentScore + "点)" :
+                             (currentScore >= 9) ? "§b[AI学習] 評価: Excellent! (" + currentScore + "点)" :
+                                                 "§a[AI学習] 評価: " + currentScore + "点 で記録";
                 player.sendMessage(new TextComponent(msg), player.getUUID());
             }
         }

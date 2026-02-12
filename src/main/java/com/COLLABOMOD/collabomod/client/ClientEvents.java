@@ -6,7 +6,7 @@ import com.COLLABOMOD.collabomod.item.ItemSilverHorn;
 import com.COLLABOMOD.collabomod.item.ItemThirdEye;
 import com.COLLABOMOD.collabomod.main.CollaboMod;
 import com.COLLABOMOD.collabomod.network.NetworkHandler;
-import com.COLLABOMOD.collabomod.network.PacketMaterialBurst;
+//import com.COLLABOMOD.collabomod.network.PacketMaterialBurst;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
 import com.mojang.math.Matrix4f;
@@ -145,7 +145,7 @@ public class ClientEvents {
                 HitResult result = dummyCamera.pick(300.0D, 0.0F, false);
                 if (result.getType() != HitResult.Type.MISS) {
                     BlockPos targetPos = new BlockPos(result.getLocation());
-                    NetworkHandler.INSTANCE.sendToServer(new PacketMaterialBurst(targetPos));
+                    //NetworkHandler.INSTANCE.sendToServer(new PacketMaterialBurst(targetPos));
                     disableElementalSight(mc);
                     mc.options.keyAttack.setDown(false);
                 }
