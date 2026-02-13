@@ -2,6 +2,7 @@ package com.COLLABOMOD.collabomod.learning;
 
 import com.COLLABOMOD.collabomod.magic.EnumMagicAnimation;
 import com.COLLABOMOD.collabomod.magic.EnumMagicShape;
+import com.COLLABOMOD.collabomod.magic.PhysicsMetadata;
 import com.COLLABOMOD.collabomod.magic.VisualMetadata;
 import com.mojang.math.Vector3f;
 
@@ -34,7 +35,8 @@ public class AttributePreference {
         int loopCount = Math.min(nodes.length, inputAttributes.length);
         for (int i = 0; i < loopCount; i++) {
             float attrStrength = inputAttributes[i];
-            if (attrStrength <= 0.0f) continue;
+            if (attrStrength <= 0.0f)
+                continue;
 
             // 「その属性が強かった」かつ「評価が高かった」場合、その属性の理想像を更新
             // 更新量 = 入力強度 * 学習信号 * 学習率
@@ -48,6 +50,7 @@ public class AttributePreference {
 
     /**
      * 属性ベクトルから、脳が考える「理想の色」を推論する
+     * 
      * @param attributes 魔法の属性ベクトル
      * @return 推論された色
      */
@@ -58,7 +61,8 @@ public class AttributePreference {
         for (int i = 0; i < Math.min(attributes.length, nodes.length); i++) {
             float weight = attributes[i];
             if (weight > 0.01f) {
-                inferredColor.add(nodes[i].idealMainColor.x() * weight, nodes[i].idealMainColor.y() * weight, nodes[i].idealMainColor.z() * weight);
+                inferredColor.add(nodes[i].idealMainColor.x() * weight, nodes[i].idealMainColor.y() * weight,
+                        nodes[i].idealMainColor.z() * weight);
                 totalWeight += weight;
             }
         }
@@ -71,16 +75,103 @@ public class AttributePreference {
         return inferredColor;
     }
 
+    /**
+     * 属性ベクトルと物理タイプから、脳が好む形状を推論する。
+     * 学習データがある属性については好みスコアを重み付き集計し、
+     * データ不足時はforceTypeベースのデフォルトにフォールバック。
+     */
+    public EnumMagicShape preferShape(float[] attributes, PhysicsMetadata.EnumForceType forceType) {
+        Map<EnumMagicShape, Float> aggregated = new HashMap<>();
+
+        for (int i = 0; i < Math.min(attributes.length, nodes.length); i++) {
+            float weight = attributes[i];
+            if (weight <= 0.01f)
+                continue;
+            for (Map.Entry<EnumMagicShape, Float> entry : nodes[i].shapeScores.entrySet()) {
+                aggregated.merge(entry.getKey(), entry.getValue() * weight, Float::sum);
+            }
+        }
+
+        if (!aggregated.isEmpty()) {
+            return aggregated.entrySet().stream()
+                    .max(Map.Entry.comparingByValue())
+                    .map(Map.Entry::getKey)
+                    .orElse(defaultShapeForForce(forceType));
+        }
+        return defaultShapeForForce(forceType);
+    }
+
+    /**
+     * 属性ベクトルと形状から、脳が好むアニメーションを推論する。
+     */
+    public EnumMagicAnimation preferAnimation(float[] attributes, EnumMagicShape shape) {
+        Map<EnumMagicAnimation, Float> aggregated = new HashMap<>();
+
+        for (int i = 0; i < Math.min(attributes.length, nodes.length); i++) {
+            float weight = attributes[i];
+            if (weight <= 0.01f)
+                continue;
+            for (Map.Entry<EnumMagicAnimation, Float> entry : nodes[i].animScores.entrySet()) {
+                aggregated.merge(entry.getKey(), entry.getValue() * weight, Float::sum);
+            }
+        }
+
+        if (!aggregated.isEmpty()) {
+            return aggregated.entrySet().stream()
+                    .max(Map.Entry.comparingByValue())
+                    .map(Map.Entry::getKey)
+                    .orElse(defaultAnimForShape(shape));
+        }
+        return defaultAnimForShape(shape);
+    }
+
+    private EnumMagicShape defaultShapeForForce(PhysicsMetadata.EnumForceType forceType) {
+        switch (forceType) {
+            case DIRECTIONAL:
+                return EnumMagicShape.BEAM;
+            case RADIAL:
+                return EnumMagicShape.SPHERE;
+            case FIELD:
+                return EnumMagicShape.RING;
+            default:
+                return EnumMagicShape.SPHERE;
+        }
+    }
+
+    private EnumMagicAnimation defaultAnimForShape(EnumMagicShape shape) {
+        switch (shape) {
+            case BEAM:
+            case CYLINDER:
+                return EnumMagicAnimation.BEAM_EXTEND;
+            case RING:
+            case CUBE:
+                return EnumMagicAnimation.SUSTAIN_SPIN;
+            default:
+                return EnumMagicAnimation.EXPAND_FADE;
+        }
+    }
+
     private void setDefaultBias(int index, AttributeNode node) {
         // 初期状態の定義（以前のAnalysisEngineのswitch文に相当）
         // ここを定義しておくと「最初からある程度それっぽい」状態になる
         switch (index) {
-            case 0: node.idealMainColor = new Vector3f(1.0f, 0.2f, 0.0f); break; // Fire
-            case 1: node.idealMainColor = new Vector3f(0.4f, 0.8f, 1.0f); break; // Ice
-            case 2: node.idealMainColor = new Vector3f(0.2f, 1.0f, 0.6f); break; // Air
-            case 3: node.idealMainColor = new Vector3f(0.5f, 0.0f, 0.8f); break; // Entropy (紫)
-            case 4: node.idealMainColor = new Vector3f(1.0f, 1.0f, 0.8f); break; // Divine (白金)
-            default: node.idealMainColor = new Vector3f(0.5f, 0.5f, 0.5f);
+            case 0:
+                node.idealMainColor = new Vector3f(1.0f, 0.2f, 0.0f);
+                break; // Fire
+            case 1:
+                node.idealMainColor = new Vector3f(0.4f, 0.8f, 1.0f);
+                break; // Ice
+            case 2:
+                node.idealMainColor = new Vector3f(0.2f, 1.0f, 0.6f);
+                break; // Air
+            case 3:
+                node.idealMainColor = new Vector3f(0.5f, 0.0f, 0.8f);
+                break; // Entropy (紫)
+            case 4:
+                node.idealMainColor = new Vector3f(1.0f, 1.0f, 0.8f);
+                break; // Divine (白金)
+            default:
+                node.idealMainColor = new Vector3f(0.5f, 0.5f, 0.5f);
         }
     }
 
@@ -125,6 +216,8 @@ public class AttributePreference {
             current.set(nx, ny, nz);
         }
 
-        private float clamp(float v) { return Math.max(0.0f, Math.min(1.0f, v)); }
+        private float clamp(float v) {
+            return Math.max(0.0f, Math.min(1.0f, v));
+        }
     }
 }

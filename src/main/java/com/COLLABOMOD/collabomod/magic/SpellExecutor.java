@@ -2,6 +2,7 @@ package com.COLLABOMOD.collabomod.magic;
 
 import com.COLLABOMOD.collabomod.entity.EntityMagicSequence;
 import com.COLLABOMOD.collabomod.entity.EntitySciencePhenomenon;
+import com.COLLABOMOD.collabomod.learning.AIInferenceCache;
 import com.COLLABOMOD.collabomod.learning.AnalysisEngine;
 import com.COLLABOMOD.collabomod.learning.CardinalLearningManager;
 import com.COLLABOMOD.collabomod.learning.LearningData;
@@ -13,14 +14,18 @@ import net.minecraft.world.phys.Vec3;
 public class SpellExecutor {
 
     public static void execute(SpellContext ctx) {
-        if (ctx.level.isClientSide) return;
-
-        // SpellResolverによって、ctx.physics と ctx.visuals は解決済みのはず。
+        if (ctx.level.isClientSide)
+            return;
 
         // 学習データの記録準備
         float[] attrVec = AnalysisEngine.analyzeScript(ctx.script);
-        VisualSettings visualSettings = new VisualSettings(ctx.visuals.mainColor, ctx.visuals.shape, ctx.visuals.animationType);
+        VisualSettings visualSettings = new VisualSettings(ctx.visuals.mainColor, ctx.visuals.shape,
+                ctx.visuals.animationType);
         LearningData learningData = new LearningData(attrVec, visualSettings);
+
+        // キャッシュ由来（外部AI推論済み）かどうかを判定
+        int scriptHash = ctx.script.hashCode();
+        boolean isAICached = AIInferenceCache.getInstance().get(scriptHash) != null;
 
         // 実行分岐: 遅延発動 (Sequence) か 即時発動 (Phenomenon) か
 
@@ -40,7 +45,8 @@ public class SpellExecutor {
                 }
                 sequence.setPos(spawnPos);
                 // 魔法陣をターゲットの方向に向ける
-                sequence.lookAt(net.minecraft.commands.arguments.EntityAnchorArgument.Anchor.EYES, ctx.target.getEyePosition());
+                sequence.lookAt(net.minecraft.commands.arguments.EntityAnchorArgument.Anchor.EYES,
+                        ctx.target.getEyePosition());
             } else if (ctx.caster != null) {
                 // ターゲットがいない -> 術者の少し前に展開
                 spawnPos = ctx.caster.getEyePosition().add(ctx.caster.getLookAngle().scale(1.5));
@@ -102,6 +108,10 @@ public class SpellExecutor {
             CardinalLearningManager.getInstance().registerInteraction(learningData);
             // 2. AIによる自己評価を実行
             float consistency = AnalysisEngine.calculateConsistencyScore(ctx.physics, ctx.visuals);
+            // 外部AI推論済みの描画はスコアを補正（AI推論は物理パラメータと整合している前提）
+            if (isAICached) {
+                consistency = Math.min(1.0f, consistency + 0.3f);
+            }
             CardinalLearningManager.getInstance().selfEvaluate(learningData, consistency);
         }
     }

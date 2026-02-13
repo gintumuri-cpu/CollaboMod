@@ -60,7 +60,7 @@ public class AnalysisEngine {
         // 起動時に学習済みモデルと現象辞書をロードする
         loadWordVectors();
         loadPhenomenaRules();
-        
+
         // 属性キーワードのベクトルをキャッシュ
         vecHeat = getVectorOrRandom(KEYWORD_HEAT);
         vecCold = getVectorOrRandom(KEYWORD_COLD);
@@ -75,9 +75,11 @@ public class AnalysisEngine {
     private static void loadWordVectors() {
         int lineCount = 0;
         int skippedCount = 0;
-        try (InputStream is = AnalysisEngine.class.getResourceAsStream("/assets/collabo_mod/models/glove_50d_lite.txt")) {
+        try (InputStream is = AnalysisEngine.class
+                .getResourceAsStream("/assets/collabo_mod/models/glove_50d_lite.txt")) {
             if (is == null) {
-                System.err.println("[Cardinal AI ERROR] Word vector model not found! Path: /assets/collabo_mod/models/glove_50d_lite.txt");
+                System.err.println(
+                        "[Cardinal AI ERROR] Word vector model not found! Path: /assets/collabo_mod/models/glove_50d_lite.txt");
                 return;
             }
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
@@ -87,7 +89,8 @@ public class AnalysisEngine {
                     String[] parts = line.trim().split("\\s+");
                     if (parts.length != VECTOR_DIMENSION + 1) {
                         if (skippedCount < 10) {
-                            System.err.println("[Cardinal AI WARN] Skipping line " + lineCount + " due to unexpected format. Parts: " + parts.length);
+                            System.err.println("[Cardinal AI WARN] Skipping line " + lineCount
+                                    + " due to unexpected format. Parts: " + parts.length);
                         }
                         skippedCount++;
                         continue;
@@ -102,13 +105,15 @@ public class AnalysisEngine {
                         WORD_VECTORS.put(word, vector);
                     } catch (NumberFormatException e) {
                         if (skippedCount < 10) {
-                            System.err.println("[Cardinal AI WARN] Skipping line " + lineCount + " due to NumberFormatException.");
+                            System.err.println(
+                                    "[Cardinal AI WARN] Skipping line " + lineCount + " due to NumberFormatException.");
                         }
                         skippedCount++;
                     }
                 }
             }
-            System.out.println("[Cardinal AI] Loaded " + WORD_VECTORS.size() + " word vectors from " + lineCount + " lines. (" + skippedCount + " lines skipped)");
+            System.out.println("[Cardinal AI] Loaded " + WORD_VECTORS.size() + " word vectors from " + lineCount
+                    + " lines. (" + skippedCount + " lines skipped)");
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -118,7 +123,8 @@ public class AnalysisEngine {
      * リソースから現象辞書 (JSON) を読み込む
      */
     private static void loadPhenomenaRules() {
-        try (InputStream is = AnalysisEngine.class.getResourceAsStream("/assets/collabo_mod/knowledge/phenomena.json")) {
+        try (InputStream is = AnalysisEngine.class
+                .getResourceAsStream("/assets/collabo_mod/knowledge/phenomena.json")) {
             if (is == null) {
                 System.err.println("Phenomena dictionary not found!");
                 return;
@@ -127,25 +133,36 @@ public class AnalysisEngine {
                 Gson gson = new Gson();
                 JsonObject json = gson.fromJson(reader, JsonObject.class);
                 JsonArray rules = json.getAsJsonArray("rules");
-                
+
                 for (JsonElement element : rules) {
                     JsonObject ruleObj = element.getAsJsonObject();
                     PhenomenonRule rule = new PhenomenonRule();
-                    
-                    if (ruleObj.has("comment")) rule.comment = ruleObj.get("comment").getAsString();
+
+                    if (ruleObj.has("comment"))
+                        rule.comment = ruleObj.get("comment").getAsString();
 
                     // 条件のパース
                     JsonObject conditions = ruleObj.getAsJsonObject("conditions");
-                    if (conditions.has("min_temperature")) rule.minTemperature = conditions.get("min_temperature").getAsFloat();
-                    if (conditions.has("max_temperature")) rule.maxTemperature = conditions.get("max_temperature").getAsFloat();
-                    if (conditions.has("min_velocity")) rule.minVelocity = conditions.get("min_velocity").getAsFloat();
-                    if (conditions.has("min_energy")) rule.minEnergy = conditions.get("min_energy").getAsFloat();
-                    if (conditions.has("force_type")) rule.forceType = conditions.get("force_type").getAsString();
-                    if (conditions.has("min_attribute_heat")) rule.minAttributeHeat = conditions.get("min_attribute_heat").getAsFloat();
-                    if (conditions.has("min_attribute_cold")) rule.minAttributeCold = conditions.get("min_attribute_cold").getAsFloat();
-                    if (conditions.has("min_attribute_motion")) rule.minAttributeMotion = conditions.get("min_attribute_motion").getAsFloat();
-                    if (conditions.has("min_attribute_entropy")) rule.minAttributeEntropy = conditions.get("min_attribute_entropy").getAsFloat();
-                    if (conditions.has("min_attribute_divine")) rule.minAttributeDivine = conditions.get("min_attribute_divine").getAsFloat();
+                    if (conditions.has("min_temperature"))
+                        rule.minTemperature = conditions.get("min_temperature").getAsFloat();
+                    if (conditions.has("max_temperature"))
+                        rule.maxTemperature = conditions.get("max_temperature").getAsFloat();
+                    if (conditions.has("min_velocity"))
+                        rule.minVelocity = conditions.get("min_velocity").getAsFloat();
+                    if (conditions.has("min_energy"))
+                        rule.minEnergy = conditions.get("min_energy").getAsFloat();
+                    if (conditions.has("force_type"))
+                        rule.forceType = conditions.get("force_type").getAsString();
+                    if (conditions.has("min_attribute_heat"))
+                        rule.minAttributeHeat = conditions.get("min_attribute_heat").getAsFloat();
+                    if (conditions.has("min_attribute_cold"))
+                        rule.minAttributeCold = conditions.get("min_attribute_cold").getAsFloat();
+                    if (conditions.has("min_attribute_motion"))
+                        rule.minAttributeMotion = conditions.get("min_attribute_motion").getAsFloat();
+                    if (conditions.has("min_attribute_entropy"))
+                        rule.minAttributeEntropy = conditions.get("min_attribute_entropy").getAsFloat();
+                    if (conditions.has("min_attribute_divine"))
+                        rule.minAttributeDivine = conditions.get("min_attribute_divine").getAsFloat();
 
                     // コマンドのパース
                     JsonArray commands = ruleObj.getAsJsonArray("commands");
@@ -153,7 +170,7 @@ public class AnalysisEngine {
                         JsonObject cmdObj = cmdElem.getAsJsonObject();
                         rule.commandTemplates.add(cmdObj);
                     }
-                    
+
                     PHENOMENA_RULES.add(rule);
                 }
             }
@@ -172,7 +189,8 @@ public class AnalysisEngine {
         for (String line : script) {
             String[] words = line.toLowerCase().split("[^a-z]+");
             for (String word : words) {
-                if (word.isEmpty()) continue;
+                if (word.isEmpty())
+                    continue;
                 float[] vec = getVectorOrRandom(word);
                 for (int i = 0; i < VECTOR_DIMENSION; i++) {
                     scriptVector[i] += vec[i];
@@ -197,11 +215,11 @@ public class AnalysisEngine {
         for (int i = 0; i < 5; i++) {
             attributes[i] = Math.max(0, attributes[i]);
         }
-        
+
         // デバッグログ: 属性値の確認
         System.out.println("[Cardinal AI] Script: " + script);
         System.out.println("[Cardinal AI] Attributes: " + Arrays.toString(attributes));
-        
+
         return attributes;
     }
 
@@ -212,7 +230,7 @@ public class AnalysisEngine {
         int hash = word.hashCode();
         Random rng = new Random(hash);
         float[] vec = new float[VECTOR_DIMENSION];
-        for(int i=0; i<VECTOR_DIMENSION; i++) {
+        for (int i = 0; i < VECTOR_DIMENSION; i++) {
             vec[i] = (rng.nextFloat() - 0.5f) * 2.0f;
         }
         return vec;
@@ -227,7 +245,8 @@ public class AnalysisEngine {
             norm1 += v1[i] * v1[i];
             norm2 += v2[i] * v2[i];
         }
-        if (norm1 == 0 || norm2 == 0) return 0.0f;
+        if (norm1 == 0 || norm2 == 0)
+            return 0.0f;
         return dot / (float) (Math.sqrt(norm1) * Math.sqrt(norm2));
     }
 
@@ -236,29 +255,31 @@ public class AnalysisEngine {
 
         // 属性値の正規化 (合計が1になるように)
         float totalAttr = 0;
-        for(float f : attributes) totalAttr += f;
+        for (float f : attributes)
+            totalAttr += f;
         if (totalAttr > 0) {
-            for(int i=0; i<attributes.length; i++) attributes[i] /= totalAttr;
+            for (int i = 0; i < attributes.length; i++)
+                attributes[i] /= totalAttr;
         }
 
         // 1. 属性ベクトルによる基礎ステータス設定
-        phy.temperature = 300.0f; //基準温度
-        
-        phy.temperature += attributes[0] * 3000.0F; 
-        phy.temperature -= attributes[1] * 2500.0F; 
+        phy.temperature = 300.0f; // 基準温度
 
-        phy.energy += attributes[0] * 150.0F; 
-        phy.energy += attributes[4] * 200.0F; 
+        phy.temperature += attributes[0] * 3000.0F;
+        phy.temperature -= attributes[1] * 2500.0F;
 
-        if (attributes[1] > 0.3F) { 
+        phy.energy += attributes[0] * 150.0F;
+        phy.energy += attributes[4] * 200.0F;
+
+        if (attributes[1] > 0.3F) {
             phy.isSolid = true;
             phy.hardness += attributes[1] * 10.0F;
             phy.mass += attributes[1] * 5.0F;
         }
 
-        phy.velocity += attributes[2] * 3.0F; 
+        phy.velocity += attributes[2] * 3.0F;
         phy.mass += attributes[2] * 0.1F;
-        phy.velocity += attributes[4] * 1.0F; 
+        phy.velocity += attributes[4] * 1.0F;
 
         // 2. スクリプトのロジックコマンドによる挙動補正
         boolean hasMove = false;
@@ -300,11 +321,14 @@ public class AnalysisEngine {
             }
         }
 
-        if (phy.temperature < 0) phy.temperature = 0;
-        if (phy.mass < 0.1F) phy.mass = 0.1F;
+        if (phy.temperature < 0)
+            phy.temperature = 0;
+        if (phy.mass < 0.1F)
+            phy.mass = 0.1F;
 
         // デバッグログ: 物理パラメータの確認
-        System.out.println("[Cardinal AI] Physics: Temp=" + phy.temperature + ", Energy=" + phy.energy + ", Type=" + phy.forceType);
+        System.out.println("[Cardinal AI] Physics: Temp=" + phy.temperature + ", Energy=" + phy.energy + ", Type="
+                + phy.forceType);
 
         return phy;
     }
@@ -314,29 +338,23 @@ public class AnalysisEngine {
         Random rand = new Random(seed);
         AttributePreference brain = CardinalLearningManager.getInstance().getBrain();
 
-        switch (phy.forceType) {
-            case DIRECTIONAL:
-                meta.shape = EnumMagicShape.BEAM;
-                meta.animationType = EnumMagicAnimation.BEAM_EXTEND;
-                break;
-            case RADIAL:
-                meta.shape = EnumMagicShape.SPHERE;
-                meta.animationType = EnumMagicAnimation.EXPAND_FADE;
-                break;
-            case FIELD:
-                meta.shape = phy.isSolid ? EnumMagicShape.CUBE : EnumMagicShape.RING;
-                meta.animationType = EnumMagicAnimation.SUSTAIN_SPIN;
-                break;
-            default:
-                meta.shape = EnumMagicShape.SPHERE;
-                meta.animationType = EnumMagicAnimation.PULSE;
-                break;
+        // 脳の学習データから形状・アニメーションを推論
+        // 学習データがない場合はforceTypeベースのデフォルトにフォールバック
+        meta.shape = brain.preferShape(attributes, phy.forceType);
+        meta.animationType = brain.preferAnimation(attributes, meta.shape);
+
+        // 物理的制約によるバリデーション
+        // 固体なのにビーム形状は不自然 → キューブに補正
+        if (phy.isSolid && (meta.shape == EnumMagicShape.BEAM || meta.shape == EnumMagicShape.PARTICLE_MIST)) {
+            meta.shape = EnumMagicShape.CUBE;
         }
 
         meta.mainColor = brain.inferColor(attributes);
         meta.scale = 1.0f + phy.areaOfEffect + (phy.energy / 50.0f);
-        if (phy.energy > 80.0f) meta.isSpiky = true;
-        if (phy.temperature > 1500.0f) meta.isWavy = true;
+        if (phy.energy > 80.0f)
+            meta.isSpiky = true;
+        if (phy.temperature > 1500.0f)
+            meta.isWavy = true;
 
         float[] raw = new float[5];
         raw[0] = Mth.clamp((phy.temperature - 300f) / 2000f, 0, 1) * 0.5f + attributes[0] * 0.5f;
@@ -371,7 +389,7 @@ public class AnalysisEngine {
                 }
             }
         }
-        
+
         if (!matched) {
             System.out.println("[Cardinal AI] No rule matched. Using fallback.");
         }
@@ -400,14 +418,13 @@ public class AnalysisEngine {
             EnumMagicAnimation anim = EnumMagicAnimation.valueOf(template.get("anim").getAsString());
             float scale = template.has("scale") ? template.get("scale").getAsFloat() : 1.0f;
             float duration = template.has("duration") ? template.get("duration").getAsFloat() : 1.0f;
-            
+
             Vector3f color = new Vector3f(1, 1, 1);
             if (template.has("r")) {
                 color = new Vector3f(
-                    template.get("r").getAsFloat(),
-                    template.get("g").getAsFloat(),
-                    template.get("b").getAsFloat()
-                );
+                        template.get("r").getAsFloat(),
+                        template.get("g").getAsFloat(),
+                        template.get("b").getAsFloat());
             }
             return new MeshCommand(0.0f, shape, anim, color, scale, duration);
         } else if ("texture".equals(type)) {
@@ -438,40 +455,99 @@ public class AnalysisEngine {
 
         switch (finalMeta.animationType) {
             case EXPAND_FADE:
-                timeline.add(new VisualKeyframe(0.0f, finalMeta.mainColor, finalMeta.subColor, 0.1f, 0.8f, finalMeta.shape, false, false, false, startVec));
-                timeline.add(new VisualKeyframe(0.3f, finalMeta.mainColor, finalMeta.subColor, finalMeta.scale, 1.0f, finalMeta.shape, finalMeta.isSpiky, finalMeta.isWavy, finalMeta.hasLightning, endVec));
-                timeline.add(new VisualKeyframe(1.0f, finalMeta.mainColor, finalMeta.subColor, finalMeta.scale * 1.5f, 0.0f, finalMeta.shape, finalMeta.isSpiky, finalMeta.isWavy, finalMeta.hasLightning, endVec));
+                timeline.add(new VisualKeyframe(0.0f, finalMeta.mainColor, finalMeta.subColor, 0.1f, 0.8f,
+                        finalMeta.shape, false, false, false, startVec));
+                timeline.add(new VisualKeyframe(0.3f, finalMeta.mainColor, finalMeta.subColor, finalMeta.scale, 1.0f,
+                        finalMeta.shape, finalMeta.isSpiky, finalMeta.isWavy, finalMeta.hasLightning, endVec));
+                timeline.add(new VisualKeyframe(1.0f, finalMeta.mainColor, finalMeta.subColor, finalMeta.scale * 1.5f,
+                        0.0f, finalMeta.shape, finalMeta.isSpiky, finalMeta.isWavy, finalMeta.hasLightning, endVec));
                 break;
             case BEAM_EXTEND:
-                timeline.add(new VisualKeyframe(0.0f, finalMeta.mainColor, finalMeta.subColor, 0.2f, 0.5f, finalMeta.shape, false, false, false, startVec));
-                timeline.add(new VisualKeyframe(0.1f, finalMeta.mainColor, finalMeta.subColor, finalMeta.scale, 1.0f, finalMeta.shape, finalMeta.isSpiky, finalMeta.isWavy, finalMeta.hasLightning, endVec));
-                timeline.add(new VisualKeyframe(0.9f, finalMeta.mainColor, finalMeta.subColor, finalMeta.scale, 1.0f, finalMeta.shape, finalMeta.isSpiky, finalMeta.isWavy, finalMeta.hasLightning, endVec));
-                timeline.add(new VisualKeyframe(1.0f, finalMeta.mainColor, finalMeta.subColor, finalMeta.scale * 0.8f, 0.0f, finalMeta.shape, false, false, false, endVec));
+                timeline.add(new VisualKeyframe(0.0f, finalMeta.mainColor, finalMeta.subColor, 0.2f, 0.5f,
+                        finalMeta.shape, false, false, false, startVec));
+                timeline.add(new VisualKeyframe(0.1f, finalMeta.mainColor, finalMeta.subColor, finalMeta.scale, 1.0f,
+                        finalMeta.shape, finalMeta.isSpiky, finalMeta.isWavy, finalMeta.hasLightning, endVec));
+                timeline.add(new VisualKeyframe(0.9f, finalMeta.mainColor, finalMeta.subColor, finalMeta.scale, 1.0f,
+                        finalMeta.shape, finalMeta.isSpiky, finalMeta.isWavy, finalMeta.hasLightning, endVec));
+                timeline.add(new VisualKeyframe(1.0f, finalMeta.mainColor, finalMeta.subColor, finalMeta.scale * 0.8f,
+                        0.0f, finalMeta.shape, false, false, false, endVec));
                 break;
             case SUSTAIN_SPIN:
-                timeline.add(new VisualKeyframe(0.0f, finalMeta.mainColor, finalMeta.subColor, 0.1f, 0.0f, finalMeta.shape, false, false, false, startVec));
-                timeline.add(new VisualKeyframe(0.2f, finalMeta.mainColor, finalMeta.subColor, finalMeta.scale, 1.0f, finalMeta.shape, finalMeta.isSpiky, finalMeta.isWavy, finalMeta.hasLightning, endVec));
-                timeline.add(new VisualKeyframe(0.8f, finalMeta.mainColor, finalMeta.subColor, finalMeta.scale, 1.0f, finalMeta.shape, finalMeta.isSpiky, finalMeta.isWavy, finalMeta.hasLightning, endVec));
-                timeline.add(new VisualKeyframe(1.0f, finalMeta.mainColor, finalMeta.subColor, finalMeta.scale * 0.5f, 0.0f, finalMeta.shape, false, false, false, endVec));
+                timeline.add(new VisualKeyframe(0.0f, finalMeta.mainColor, finalMeta.subColor, 0.1f, 0.0f,
+                        finalMeta.shape, false, false, false, startVec));
+                timeline.add(new VisualKeyframe(0.2f, finalMeta.mainColor, finalMeta.subColor, finalMeta.scale, 1.0f,
+                        finalMeta.shape, finalMeta.isSpiky, finalMeta.isWavy, finalMeta.hasLightning, endVec));
+                timeline.add(new VisualKeyframe(0.8f, finalMeta.mainColor, finalMeta.subColor, finalMeta.scale, 1.0f,
+                        finalMeta.shape, finalMeta.isSpiky, finalMeta.isWavy, finalMeta.hasLightning, endVec));
+                timeline.add(new VisualKeyframe(1.0f, finalMeta.mainColor, finalMeta.subColor, finalMeta.scale * 0.5f,
+                        0.0f, finalMeta.shape, false, false, false, endVec));
                 break;
             default:
-                timeline.add(new VisualKeyframe(0.0f, finalMeta.mainColor, finalMeta.subColor, 0.1f, 0.8f, finalMeta.shape, false, false, false, startVec));
-                timeline.add(new VisualKeyframe(1.0f, finalMeta.mainColor, finalMeta.subColor, finalMeta.scale, 0.0f, finalMeta.shape, finalMeta.isSpiky, finalMeta.isWavy, finalMeta.hasLightning, endVec));
+                timeline.add(new VisualKeyframe(0.0f, finalMeta.mainColor, finalMeta.subColor, 0.1f, 0.8f,
+                        finalMeta.shape, false, false, false, startVec));
+                timeline.add(new VisualKeyframe(1.0f, finalMeta.mainColor, finalMeta.subColor, finalMeta.scale, 0.0f,
+                        finalMeta.shape, finalMeta.isSpiky, finalMeta.isWavy, finalMeta.hasLightning, endVec));
                 break;
         }
         return timeline;
     }
 
+    /**
+     * 外部AIが返したVisualMetadataに不足するrawVectorとtimelineを補完する。
+     * 外部AIはshape/mainColor/animationTypeのみ返すが、レンダラーは
+     * rawVector（パラメトリックメッシュ変形）とtimeline（キーフレーム動画）を必要とする。
+     */
+    public static VisualMetadata completeVisualMetadata(VisualMetadata aiMeta, PhysicsMetadata phy,
+            float[] attributes) {
+        // rawVectorの計算（物理パラメータ + 属性値から）
+        if (aiMeta.rawVector == null || aiMeta.rawVector.length == 0) {
+            float[] raw = new float[5];
+            raw[0] = Mth.clamp((phy.temperature - 300f) / 2000f, 0, 1) * 0.5f + attributes[0] * 0.5f;
+            raw[1] = Mth.clamp((273f - phy.temperature) / 273f, 0, 1) * 0.5f + attributes[1] * 0.5f;
+            raw[2] = Mth.clamp(phy.velocity / 3.0f, 0, 1) * 0.5f + attributes[2] * 0.5f;
+            raw[3] = attributes[3];
+            raw[4] = attributes[4];
+            aiMeta.rawVector = raw;
+        }
+
+        // scaleの補完
+        if (aiMeta.scale <= 0.1f) {
+            aiMeta.scale = 1.0f + phy.areaOfEffect + (phy.energy / 50.0f);
+        }
+
+        // 物理パラメータからフラグ補完
+        if (phy.energy > 80.0f)
+            aiMeta.isSpiky = true;
+        if (phy.temperature > 1500.0f)
+            aiMeta.isWavy = true;
+
+        // timelineの生成
+        if (aiMeta.timeline == null || aiMeta.timeline.isEmpty()) {
+            aiMeta.timeline = generateTimeline(aiMeta);
+        }
+
+        return aiMeta;
+    }
+
     public static float calculateConsistencyScore(PhysicsMetadata phy, VisualMetadata vis) {
         float score = 0.0f;
-        if (phy.forceType == PhysicsMetadata.EnumForceType.DIRECTIONAL && (vis.shape == EnumMagicShape.BEAM || vis.shape == EnumMagicShape.CYLINDER)) score += 0.4f;
-        else if (phy.forceType == PhysicsMetadata.EnumForceType.DIRECTIONAL) score -= 0.4f;
-        if (phy.forceType == PhysicsMetadata.EnumForceType.RADIAL && vis.shape == EnumMagicShape.SPHERE) score += 0.4f;
-        else if (phy.forceType == PhysicsMetadata.EnumForceType.RADIAL) score -= 0.4f;
-        if (phy.temperature > 1000f && (vis.mainColor.x() > 0.7f && vis.mainColor.y() < 0.5f)) score += 0.2f;
-        if (phy.temperature < 273f && (vis.mainColor.z() > 0.7f && vis.mainColor.x() < 0.5f)) score += 0.2f;
-        if (phy.energy > 50f && (vis.isSpiky || vis.layerCount > 1)) score += 0.2f;
-        if (phy.energy < 10f && (vis.isSpiky || vis.layerCount > 1)) score -= 0.2f;
+        if (phy.forceType == PhysicsMetadata.EnumForceType.DIRECTIONAL
+                && (vis.shape == EnumMagicShape.BEAM || vis.shape == EnumMagicShape.CYLINDER))
+            score += 0.4f;
+        else if (phy.forceType == PhysicsMetadata.EnumForceType.DIRECTIONAL)
+            score -= 0.4f;
+        if (phy.forceType == PhysicsMetadata.EnumForceType.RADIAL && vis.shape == EnumMagicShape.SPHERE)
+            score += 0.4f;
+        else if (phy.forceType == PhysicsMetadata.EnumForceType.RADIAL)
+            score -= 0.4f;
+        if (phy.temperature > 1000f && (vis.mainColor.x() > 0.7f && vis.mainColor.y() < 0.5f))
+            score += 0.2f;
+        if (phy.temperature < 273f && (vis.mainColor.z() > 0.7f && vis.mainColor.x() < 0.5f))
+            score += 0.2f;
+        if (phy.energy > 50f && (vis.isSpiky || vis.layerCount > 1))
+            score += 0.2f;
+        if (phy.energy < 10f && (vis.isSpiky || vis.layerCount > 1))
+            score -= 0.2f;
         return Mth.clamp(score, -1.0f, 1.0f);
     }
 
@@ -486,7 +562,8 @@ public class AnalysisEngine {
 
     private static float magnitude(float[] v) {
         float sum = 0;
-        for (float f : v) sum += f * f;
+        for (float f : v)
+            sum += f * f;
         return (float) Math.sqrt(sum);
     }
 
@@ -516,20 +593,30 @@ public class AnalysisEngine {
         float minAttributeDivine = 0.0f;
         String forceType = null;
         String comment = ""; // デバッグ用コメント
-        
+
         List<JsonObject> commandTemplates = new ArrayList<>();
 
         boolean matches(PhysicsMetadata phy, float[] attributes) {
-            if (phy.temperature < minTemperature) return false;
-            if (phy.temperature > maxTemperature) return false;
-            if (phy.velocity < minVelocity) return false;
-            if (phy.energy < minEnergy) return false;
-            if (forceType != null && !forceType.equals(phy.forceType.name())) return false;
-            if (attributes[0] < minAttributeHeat) return false;
-            if (attributes[1] < minAttributeCold) return false;
-            if (attributes[2] < minAttributeMotion) return false;
-            if (attributes[3] < minAttributeEntropy) return false;
-            if (attributes[4] < minAttributeDivine) return false;
+            if (phy.temperature < minTemperature)
+                return false;
+            if (phy.temperature > maxTemperature)
+                return false;
+            if (phy.velocity < minVelocity)
+                return false;
+            if (phy.energy < minEnergy)
+                return false;
+            if (forceType != null && !forceType.equals(phy.forceType.name()))
+                return false;
+            if (attributes[0] < minAttributeHeat)
+                return false;
+            if (attributes[1] < minAttributeCold)
+                return false;
+            if (attributes[2] < minAttributeMotion)
+                return false;
+            if (attributes[3] < minAttributeEntropy)
+                return false;
+            if (attributes[4] < minAttributeDivine)
+                return false;
             return true;
         }
     }
