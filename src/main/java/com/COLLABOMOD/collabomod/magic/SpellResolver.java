@@ -37,25 +37,9 @@ public class SpellResolver {
             ctx.visuals = AnalysisEngine.completeVisualMetadata(cached, ctx.physics, attributes);
             System.out.println("[SpellResolver] Using cached AI visuals for hash: " + scriptHash);
         } else {
-            // フォールバック: 既存ローカルAIで即時推論
+            // フォールバック: ローカルAIで即時推論
+            // ※外部AIはApply AIボタン経由でのみ使用（クォータ保護のため自動発火しない）
             ctx.visuals = AnalysisEngine.deriveVisualsFromPhysics(ctx.physics, attributes, seed);
-
-            // 非同期で外部AIに推論依頼（結果は次回以降に使用）
-            if (ExternalAIConfig.getInstance().isReady()) {
-                final float[] attrCopy = attributes.clone();
-                final PhysicsMetadata phyCopy = ctx.physics;
-                final List<String> scriptCopy = new ArrayList<>(ctx.script);
-
-                ExternalAIService.getInstance().inferAsync(phyCopy, attrCopy, scriptCopy)
-                        .thenAccept(result -> {
-                            if (result != null) {
-                                AIInferenceCache.getInstance().put(scriptHash, result);
-                                // 外部AI結果をローカルAI脳にも逆学習
-                                CardinalLearningManager.getInstance().learnFromExternalAI(attrCopy, result);
-                                System.out.println("[SpellResolver] External AI result cached + reverse-learned.");
-                            }
-                        });
-            }
         }
 
         // --- ステップ4: 詠唱時間の設定 ---

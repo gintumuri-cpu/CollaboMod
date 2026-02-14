@@ -1,6 +1,5 @@
 package com.COLLABOMOD.collabomod.main;
 
-
 import com.COLLABOMOD.collabomod.client.KeyInit;
 import com.COLLABOMOD.collabomod.client.particle.MagicGlowParticle;
 import com.COLLABOMOD.collabomod.register.EntityRegister;
@@ -26,28 +25,25 @@ public class ClientEventBusSubscriber {
 
     @SubscribeEvent
     public static void onClientSetup(FMLClientSetupEvent event) {
-            // グラム・デモリッションはモデルを持たず、パーティクルだけで表現するため
-            // "NoopRenderer"（何もしないレンダラー＝透明）を割り当てます
-            EntityRenderers.register(EntityRegister.GRAM_DEMOLITION.get(), NoopRenderer::new);
-            EntityRenderers.register(EntityRegister.MIST_DISPERSION.get(), NoopRenderer::new);
-            EntityRenderers.register(EntityRegister.AIR_BULLET.get(), NoopRenderer::new);
-            EntityRenderers.register(EntityRegister.MAGIC_SEQUENCE.get(), RenderMagicSequence::new);
-            EntityRenderers.register(EntityRegister.MAGIC_SEQUENCE.get(), RenderMagicSequence::new);
-            EntityRenderers.register(EntityRegister.SCIENCE_PHENOMENON.get(), RenderUniversalMagic::new);
-            KeyInit.register();
+        // グラム・デモリッションはモデルを持たず、パーティクルだけで表現するため
+        // "NoopRenderer"（何もしないレンダラー＝透明）を割り当てます
+        EntityRenderers.register(EntityRegister.GRAM_DEMOLITION.get(), NoopRenderer::new);
+        EntityRenderers.register(EntityRegister.MIST_DISPERSION.get(), NoopRenderer::new);
+        EntityRenderers.register(EntityRegister.AIR_BULLET.get(), NoopRenderer::new);
+        EntityRenderers.register(EntityRegister.MAGIC_SEQUENCE.get(), RenderMagicSequence::new);
+        EntityRenderers.register(EntityRegister.SCIENCE_PHENOMENON.get(), RenderUniversalMagic::new);
+        EntityRenderers.register(EntityRegister.RESIDUAL_FIELD.get(), NoopRenderer::new);
+        KeyInit.register();
 
         event.enqueueWork(() -> {
             MenuScreens.register(MenuTypeRegister.MAGIC_CONSOLE_MENU.get(), MagicConsoleScreen::new);
         });
-        }
+    }
 
     @SubscribeEvent
     public static void registerParticleFactories(ParticleFactoryRegisterEvent event) {
         Minecraft.getInstance().particleEngine.register(
                 ParticleRegister.GLOW_PARTICLE.get(),
-                MagicGlowParticle.Provider::new
-        );
+                MagicGlowParticle.Provider::new);
     }
 }
-
-

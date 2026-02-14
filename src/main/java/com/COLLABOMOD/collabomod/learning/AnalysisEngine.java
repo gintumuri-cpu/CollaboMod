@@ -186,6 +186,9 @@ public class AnalysisEngine {
         float[] scriptVector = new float[VECTOR_DIMENSION];
         int wordCount = 0;
 
+        // ■ キーワード直接マッチング用カウンター
+        float[] keywordBoost = new float[5]; // [heat, cold, motion, entropy, divine]
+
         for (String line : script) {
             String[] words = line.toLowerCase().split("[^a-z]+");
             for (String word : words) {
@@ -196,6 +199,12 @@ public class AnalysisEngine {
                     scriptVector[i] += vec[i];
                 }
                 wordCount++;
+
+                // ■ キーワード直接マッチング: GloVeベクトルに加えて属性を確実に反映
+                float[] kwScore = getKeywordScore(word);
+                for (int k = 0; k < 5; k++) {
+                    keywordBoost[k] += kwScore[k];
+                }
             }
         }
 
@@ -216,11 +225,162 @@ public class AnalysisEngine {
             attributes[i] = Math.max(0, attributes[i]);
         }
 
+        // ■ キーワードブーストの加算 (GloVeが弱くても基本的な属性を保証)
+        for (int i = 0; i < 5; i++) {
+            attributes[i] = Math.min(1.0f, attributes[i] + keywordBoost[i]);
+        }
+
         // デバッグログ: 属性値の確認
         System.out.println("[Cardinal AI] Script: " + script);
         System.out.println("[Cardinal AI] Attributes: " + Arrays.toString(attributes));
+        System.out.println("[Cardinal AI] Keyword boosts: " + Arrays.toString(keywordBoost));
 
         return attributes;
+    }
+
+    // ■ キーワード→属性スコア: Map + あいまい一致（前方一致・部分一致対応）
+    private static final Map<String, float[]> KEYWORD_SCORES = new HashMap<>();
+
+    static {
+        // float[5] = {heat, cold, motion, entropy, divine}
+        // --- Heat (火/爆発) ---
+        for (String w : new String[] { "fire", "flame", "burn", "blaze", "inferno", "heat", "magma", "lava",
+                "scorch", "ignite", "combust", "incinerate", "fireball", "firestorm" })
+            KEYWORD_SCORES.put(w, new float[] { 0.6f, 0, 0, 0, 0 });
+        for (String w : new String[] { "hot", "warm", "ember", "solar", "sun", "pyro", "thermal", "sear",
+                "smelt", "forge", "furnace", "volcano", "molten", "flare" })
+            KEYWORD_SCORES.put(w, new float[] { 0.4f, 0, 0, 0, 0 });
+        for (String w : new String[] { "bomb", "explosion", "blast", "burst", "detonate", "erupt", "explode",
+                "extreme", "extream", "destroy", "demolish", "nuke", "napalm", "combust",
+                "meteor", "comet", "impact", "smash", "crash", "shatter" })
+            KEYWORD_SCORES.put(w, new float[] { 0.3f, 0, 0, 0, 0 });
+
+        // --- Cold (氷/冷気) ---
+        for (String w : new String[] { "ice", "frost", "freeze", "frozen", "blizzard", "glacier", "snow",
+                "cold", "arctic", "icicle", "frostbite", "permafrost", "iceberg" })
+            KEYWORD_SCORES.put(w, new float[] { 0, 0.6f, 0, 0, 0 });
+        for (String w : new String[] { "chill", "cool", "winter", "crystal", "cryo", "hail", "sleet",
+                "tundra", "frigid", "frosty", "glacial", "polar", "subzero", "diamond" })
+            KEYWORD_SCORES.put(w, new float[] { 0, 0.4f, 0, 0, 0 });
+
+        // --- Motion (雷/風/速度) ---
+        for (String w : new String[] { "lightning", "thunder", "bolt", "spark", "electric", "shock", "voltage",
+                "storm", "thunderbolt", "discharge", "arc", "plasma", "zap", "electro" })
+            KEYWORD_SCORES.put(w, new float[] { 0, 0, 0.6f, 0, 0 });
+        for (String w : new String[] { "wind", "gust", "tornado", "speed", "rush", "swift", "rapid", "flash",
+                "sonic", "hurricane", "cyclone", "typhoon", "vortex", "whirlwind", "tempest",
+                "force", "kinetic", "momentum", "velocity", "impulse", "thrust", "jet", "dash" })
+            KEYWORD_SCORES.put(w, new float[] { 0, 0, 0.4f, 0, 0 });
+        for (String w : new String[] { "air", "breeze", "current", "wave", "gale", "draft", "blow",
+                "fly", "soar", "float", "hover", "levitate", "teleport", "warp" })
+            KEYWORD_SCORES.put(w, new float[] { 0, 0, 0.3f, 0, 0 });
+
+        // --- Entropy (混沌/闇) ---
+        for (String w : new String[] { "chaos", "entropy", "void", "darkness", "shadow", "corrupt", "decay",
+                "wither", "abyss", "oblivion", "annihilate", "disintegrate", "dissolve" })
+            KEYWORD_SCORES.put(w, new float[] { 0, 0, 0, 0.6f, 0 });
+        for (String w : new String[] { "dark", "black", "curse", "hex", "blight", "doom", "death", "toxic",
+                "poison", "plague", "venom", "necrotic", "undead", "zombie", "skeleton",
+                "demon", "devil", "hell", "infernal", "nightmare", "horror", "dread" })
+            KEYWORD_SCORES.put(w, new float[] { 0, 0, 0, 0.4f, 0 });
+        for (String w : new String[] { "random", "unstable", "wild", "distort", "twist", "warp", "mutate",
+                "corrupt", "taint", "rot", "erode", "dissolve" })
+            KEYWORD_SCORES.put(w, new float[] { 0, 0, 0, 0.3f, 0 });
+
+        // --- Divine (神聖/光) ---
+        for (String w : new String[] { "light", "holy", "divine", "sacred", "angel", "heaven", "purify",
+                "bless", "sanctify", "exorcise", "smite", "judgment", "consecrate" })
+            KEYWORD_SCORES.put(w, new float[] { 0, 0, 0, 0, 0.6f });
+        for (String w : new String[] { "heal", "restore", "radiant", "luminous", "star", "celestial", "aura",
+                "miracle", "prayer", "salvation", "redemption", "grace", "blessing",
+                "aurora", "dawn", "guardian", "protect", "shield", "barrier", "ward" })
+            KEYWORD_SCORES.put(w, new float[] { 0, 0, 0, 0, 0.4f });
+        for (String w : new String[] { "bright", "glow", "shine", "pure", "white", "golden", "silver",
+                "moon", "lunar", "ethereal", "spirit", "soul", "mystic" })
+            KEYWORD_SCORES.put(w, new float[] { 0, 0, 0, 0, 0.3f });
+
+        // --- 汎用戦闘/魔法語 (複数属性に少しずつ加算) ---
+        KEYWORD_SCORES.put("attack", new float[] { 0.2f, 0, 0.2f, 0, 0 });
+        KEYWORD_SCORES.put("strike", new float[] { 0.2f, 0, 0.2f, 0, 0 });
+        KEYWORD_SCORES.put("power", new float[] { 0.2f, 0, 0.2f, 0, 0 });
+        KEYWORD_SCORES.put("energy", new float[] { 0.1f, 0, 0.3f, 0, 0 });
+        KEYWORD_SCORES.put("magic", new float[] { 0, 0, 0, 0.1f, 0.2f });
+        KEYWORD_SCORES.put("spell", new float[] { 0, 0, 0, 0.1f, 0.2f });
+        KEYWORD_SCORES.put("cast", new float[] { 0, 0, 0.1f, 0.1f, 0.1f });
+        KEYWORD_SCORES.put("summon", new float[] { 0, 0, 0, 0.2f, 0.2f });
+        KEYWORD_SCORES.put("elemental", new float[] { 0.15f, 0.15f, 0.15f, 0, 0 });
+        KEYWORD_SCORES.put("dragon", new float[] { 0.3f, 0, 0, 0.1f, 0 });
+        KEYWORD_SCORES.put("water", new float[] { 0, 0.3f, 0.2f, 0, 0 });
+        KEYWORD_SCORES.put("earth", new float[] { 0, 0, 0, 0, 0.2f });
+        KEYWORD_SCORES.put("stone", new float[] { 0, 0, 0, 0, 0.1f });
+        KEYWORD_SCORES.put("rock", new float[] { 0, 0, 0, 0, 0.1f });
+        KEYWORD_SCORES.put("metal", new float[] { 0, 0, 0.2f, 0, 0 });
+        KEYWORD_SCORES.put("iron", new float[] { 0, 0, 0.2f, 0, 0 });
+        KEYWORD_SCORES.put("steel", new float[] { 0, 0, 0.2f, 0, 0 });
+        KEYWORD_SCORES.put("gravity", new float[] { 0, 0, 0.3f, 0.2f, 0 });
+        KEYWORD_SCORES.put("mega", new float[] { 0.2f, 0, 0.2f, 0, 0 });
+        KEYWORD_SCORES.put("ultra", new float[] { 0.2f, 0, 0.2f, 0, 0 });
+        KEYWORD_SCORES.put("super", new float[] { 0.2f, 0, 0.2f, 0, 0 });
+        KEYWORD_SCORES.put("hyper", new float[] { 0.2f, 0, 0.2f, 0, 0 });
+        KEYWORD_SCORES.put("max", new float[] { 0.2f, 0, 0.2f, 0, 0 });
+        KEYWORD_SCORES.put("beam", new float[] { 0.1f, 0, 0.3f, 0, 0.1f });
+        KEYWORD_SCORES.put("ray", new float[] { 0.1f, 0, 0.2f, 0, 0.2f });
+        KEYWORD_SCORES.put("laser", new float[] { 0.2f, 0, 0.3f, 0, 0 });
+        KEYWORD_SCORES.put("cannon", new float[] { 0.3f, 0, 0.2f, 0, 0 });
+        KEYWORD_SCORES.put("arrow", new float[] { 0, 0, 0.4f, 0, 0 });
+        KEYWORD_SCORES.put("bullet", new float[] { 0, 0, 0.4f, 0, 0 });
+        KEYWORD_SCORES.put("missile", new float[] { 0.2f, 0, 0.3f, 0, 0 });
+        KEYWORD_SCORES.put("nova", new float[] { 0.3f, 0, 0, 0, 0.2f });
+        KEYWORD_SCORES.put("big", new float[] { 0.1f, 0, 0.1f, 0, 0 });
+        KEYWORD_SCORES.put("huge", new float[] { 0.1f, 0, 0.1f, 0, 0 });
+        KEYWORD_SCORES.put("giant", new float[] { 0.1f, 0, 0.1f, 0, 0 });
+        KEYWORD_SCORES.put("massive", new float[] { 0.1f, 0, 0.1f, 0, 0 });
+    }
+
+    /**
+     * キーワードスコアを取得する（完全一致→前方一致→部分一致の3段階）
+     */
+    private static float[] getKeywordScore(String word) {
+        if (word.length() < 2)
+            return new float[5];
+
+        // 1. 完全一致
+        float[] exact = KEYWORD_SCORES.get(word);
+        if (exact != null)
+            return exact;
+
+        // 2. 前方一致 (3文字以上の前方部分が一致する最長キーワードを探す)
+        float[] bestPrefix = null;
+        int bestLen = 0;
+        for (Map.Entry<String, float[]> entry : KEYWORD_SCORES.entrySet()) {
+            String key = entry.getKey();
+            if (key.length() >= 3 && word.length() >= 3) {
+                // wordがkeyで始まる、またはkeyがwordで始まる
+                int minLen = Math.min(word.length(), key.length());
+                int matchLen = 0;
+                for (int i = 0; i < minLen; i++) {
+                    if (word.charAt(i) == key.charAt(i))
+                        matchLen++;
+                    else
+                        break;
+                }
+                // 3文字以上の前方一致で、かつ短い方の70%以上一致
+                if (matchLen >= 3 && matchLen >= Math.min(word.length(), key.length()) * 0.7f
+                        && matchLen > bestLen) {
+                    bestLen = matchLen;
+                    bestPrefix = entry.getValue();
+                }
+            }
+        }
+        if (bestPrefix != null) {
+            // 前方一致は完全一致より少し弱く
+            float[] scaled = new float[5];
+            for (int i = 0; i < 5; i++)
+                scaled[i] = bestPrefix[i] * 0.8f;
+            return scaled;
+        }
+
+        return new float[5];
     }
 
     private static float[] getVectorOrRandom(String word) {

@@ -43,17 +43,60 @@ public class ExternalAIService {
      */
     public void initialize() {
         ExternalAIConfig config = ExternalAIConfig.getInstance();
+
+        // ■ IPv4を優先 (IPv6接続問題を回避)
+        System.setProperty("java.net.preferIPv4Stack", "true");
+
+        // ■ HttpClient: executorを分離、connectTimeout短縮、HTTP/1.1強制
         this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(config.timeoutSeconds))
-                .executor(executor)
+                .connectTimeout(Duration.ofSeconds(10))
+                .version(HttpClient.Version.HTTP_1_1)
+                .followRedirects(HttpClient.Redirect.NORMAL)
                 .build();
 
         if (config.isReady()) {
             System.out.println("[External AI] Service initialized. API: " + config.apiUrl + " Model: " + config.model);
+            // ■ 起動時に接続テスト
+            testConnection(config);
         } else {
             System.out
                     .println("[External AI] Service initialized but DISABLED. Set enabled=true and apiKey in config.");
         }
+    }
+
+    /**
+     * API接続テスト（起動時に非同期で実行）
+     */
+    private void testConnection(ExternalAIConfig config) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                URI uri = URI.create(config.apiUrl);
+                System.out.println("[External AI] Connection test: host=" + uri.getHost() + " port=" + uri.getPort());
+
+                // 簡単なPOSTテスト (空ボディ) - ステータス確認のみ
+                HttpRequest testReq = HttpRequest.newBuilder()
+                        .uri(uri)
+                        .header("Content-Type", "application/json")
+                        .timeout(Duration.ofSeconds(10))
+                        .POST(HttpRequest.BodyPublishers.ofString("{}"))
+                        .build();
+                HttpResponse<String> testResp = httpClient.send(testReq, HttpResponse.BodyHandlers.ofString());
+                System.out.println("[External AI] Connection test result: HTTP " + testResp.statusCode());
+            } catch (java.net.ConnectException e) {
+                System.err.println("[External AI] Connection test FAILED: Connection refused - " + e.getMessage());
+            } catch (java.net.http.HttpConnectTimeoutException e) {
+                System.err.println("[External AI] Connection test FAILED: Connect timeout - " + e.getMessage());
+            } catch (java.net.http.HttpTimeoutException e) {
+                System.err.println("[External AI] Connection test FAILED: Request timeout - " + e.getMessage());
+            } catch (javax.net.ssl.SSLException e) {
+                System.err.println("[External AI] Connection test FAILED: SSL error - " + e.getMessage());
+            } catch (java.nio.channels.UnresolvedAddressException e) {
+                System.err.println("[External AI] Connection test FAILED: DNS resolution failed");
+            } catch (Exception e) {
+                System.err.println("[External AI] Connection test FAILED: " + e.getClass().getSimpleName() + " - "
+                        + e.getMessage());
+            }
+        }, executor);
     }
 
     /**
@@ -74,9 +117,18 @@ public class ExternalAIService {
     public CompletableFuture<VisualMetadata> inferAsync(PhysicsMetadata physics, float[] attributes,
             List<String> script) {
         ExternalAIConfig config = ExternalAIConfig.getInstance();
+        System.out.println("[External AI] inferAsync called. isReady=" + config.isReady() + " httpClient="
+                + (httpClient != null ? "OK" : "NULL"));
 
-        if (!config.isReady() || httpClient == null) {
+        if (!config.isReady() && !config.debugMode) {
+            System.err.println("[External AI] inferAsync ABORT: not ready");
             return CompletableFuture.completedFuture(null);
+        }
+
+        // ■ デバッグモード: APIを呼ばずにダミー結果を返す
+        if (config.debugMode) {
+            System.out.println("[External AI] DEBUG MODE ACTIVE. Returning mock data.");
+            return CompletableFuture.completedFuture(createMockData(script));
         }
 
         // 同一スクリプトの重複リクエストを防止
@@ -86,14 +138,16 @@ public class ExternalAIService {
             return CompletableFuture.completedFuture(null);
         }
 
+        System.out.println("[External AI] Starting async request for hash: " + scriptHash + " URL: " + config.apiUrl);
+
         return CompletableFuture.supplyAsync(() -> {
             try {
                 String prompt = buildPrompt(physics, attributes, script);
                 boolean isGemini = isGeminiApi(config.apiUrl);
                 String requestBody = isGemini ? buildGeminiRequestBody(prompt) : buildOpenAIRequestBody(prompt, config);
 
-                // Gemini API: ?key= がURLに含まれているのでAuthorizationヘッダー不要
-                // OpenAI API: Bearer トークンで認証
+                System.out.println("[External AI] Request body length: " + requestBody.length() + " chars");
+
                 HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
                         .uri(URI.create(config.apiUrl))
                         .header("Content-Type", "application/json")
@@ -106,28 +160,94 @@ public class ExternalAIService {
 
                 HttpRequest request = reqBuilder.build();
 
-                System.out.println(
-                        "[External AI] Sending inference request (" + (isGemini ? "Gemini" : "OpenAI") + ")...");
+                // ■ リトライロジック: 429/5xx エラー時は最大3回リトライ
+                final int MAX_RETRIES = 3;
+                HttpResponse<String> response = null;
+                for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+                    System.out.println(
+                            "[External AI] Sending inference request (" + (isGemini ? "Gemini" : "OpenAI")
+                                    + ") attempt " + attempt + "/" + MAX_RETRIES + "...");
 
-                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                    response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
-                if (response.statusCode() == 200) {
+                    System.out.println("[External AI] Response received! Status: " + response.statusCode());
+
+                    if (response.statusCode() == 200) {
+                        break; // 成功
+                    } else if (response.statusCode() == 429) {
+                        // レート制限: 待ってからリトライ
+                        int waitSec = 25; // デフォルト25秒
+                        String body = response.body();
+                        // "retry in XX.XXs" パターンから待機秒数を抽出
+                        int retryIdx = body.indexOf("retry in ");
+                        if (retryIdx >= 0) {
+                            try {
+                                String numStr = body.substring(retryIdx + 9, body.indexOf("s", retryIdx + 9));
+                                waitSec = (int) Math.ceil(Double.parseDouble(numStr));
+                            } catch (Exception ignored) {
+                            }
+                        }
+                        if (attempt < MAX_RETRIES) {
+                            System.out.println(
+                                    "[External AI] Rate limited (429). Waiting " + waitSec + "s before retry...");
+                            Thread.sleep(waitSec * 1000L);
+                        } else {
+                            System.err.println("[External AI] Rate limited (429). Max retries exhausted.");
+                        }
+                    } else if (response.statusCode() >= 500) {
+                        // サーバーエラー: 5秒待ってリトライ
+                        if (attempt < MAX_RETRIES) {
+                            System.out.println("[External AI] Server error (" + response.statusCode()
+                                    + "). Waiting 5s before retry...");
+                            Thread.sleep(5000);
+                        }
+                    } else {
+                        // 4xx (429以外) は即失敗
+                        break;
+                    }
+                }
+
+                if (response != null && response.statusCode() == 200) {
                     VisualMetadata result = parseResponse(response.body());
                     if (result != null) {
                         System.out.println("[External AI] Inference SUCCESS. Shape: " + result.shape + " Color: (" +
                                 result.mainColor.x() + ", " + result.mainColor.y() + ", " + result.mainColor.z() + ")");
+                    } else {
+                        System.err.println("[External AI] Parse returned null. Response body: "
+                                + response.body().substring(0, Math.min(500, response.body().length())));
                     }
                     return result;
                 } else {
                     System.err.println(
-                            "[External AI] API returned status " + response.statusCode() + ": " + response.body());
+                            "[External AI] API returned status " + response.statusCode() + ": "
+                                    + response.body().substring(0, Math.min(500, response.body().length())));
                     return null;
                 }
+            } catch (java.net.http.HttpConnectTimeoutException e) {
+                System.err
+                        .println("[External AI] FAILED: Connection timeout (cannot reach server) - " + e.getMessage());
+                return null;
             } catch (java.net.http.HttpTimeoutException e) {
-                System.err.println("[External AI] Inference FAILED: request timed out");
+                System.err.println("[External AI] FAILED: Request timeout (server too slow) - " + e.getMessage());
+                return null;
+            } catch (java.net.ConnectException e) {
+                System.err.println("[External AI] FAILED: Connection refused - " + e.getMessage());
+                return null;
+            } catch (java.io.IOException e) {
+                System.err.println(
+                        "[External AI] FAILED: IO error (" + e.getClass().getSimpleName() + ") - " + e.getMessage());
+                if (e.getCause() != null) {
+                    System.err.println("[External AI]   Cause: " + e.getCause().getClass().getSimpleName() + " - "
+                            + e.getCause().getMessage());
+                }
+                return null;
+            } catch (InterruptedException e) {
+                System.err.println("[External AI] FAILED: Request interrupted");
+                Thread.currentThread().interrupt();
                 return null;
             } catch (Exception e) {
-                System.err.println("[External AI] Inference FAILED: " + e.getMessage());
+                System.err.println("[External AI] FAILED: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+                e.printStackTrace();
                 return null;
             } finally {
                 inFlightHashes.remove(scriptHash);
@@ -141,10 +261,25 @@ public class ExternalAIService {
     private String buildPrompt(PhysicsMetadata physics, float[] attributes, List<String> script) {
         StringBuilder sb = new StringBuilder();
         sb.append("あなたはMinecraftの魔法エフェクトデザイナーです。\n");
-        sb.append("以下の物理パラメータに基づいて、最適な描画設定をJSON形式で返してください。\n");
+        sb.append("以下のスクリプト（ユーザーが入力した魔法の呪文テキスト）を解析し、最適な描画設定をJSON形式で返してください。\n");
         sb.append("JSONのみを返してください。説明文は不要です。\n\n");
 
-        sb.append("【物理パラメータ】\n");
+        sb.append("【重要】スクリプトの単語から魔法の性質を判断してください。\n");
+        sb.append("例: 'lightning bolt' → Motion属性高め、LIGHTNING形状、青白い色\n");
+        sb.append("例: 'fire explosion' → Heat属性高め、SPHERE形状、赤橙色\n");
+        sb.append("例: 'ice wall' → Cold属性高め、CUBE形状、水色\n");
+        sb.append("例: 'holy heal' → Divine属性高め、RING形状、黄金色\n");
+        sb.append("例: 'chaos void' → Entropy属性高め、VORTEX形状、紫黒色\n\n");
+
+        sb.append("【スクリプト（呪文テキスト）】\n");
+        for (String line : script) {
+            if (line != null && !line.isEmpty()) {
+                sb.append("  ").append(line).append("\n");
+            }
+        }
+        sb.append("\n");
+
+        sb.append("【ローカル推定の物理パラメータ】（参考値）\n");
         sb.append("- 温度: ").append(String.format("%.1f", physics.temperature)).append("K\n");
         sb.append("- エネルギー: ").append(String.format("%.1f", physics.energy)).append("\n");
         sb.append("- 速度: ").append(String.format("%.2f", physics.velocity)).append("\n");
@@ -153,18 +288,12 @@ public class ExternalAIService {
         sb.append("- 固体: ").append(physics.isSolid).append("\n");
         sb.append("- 範囲: ").append(String.format("%.1f", physics.areaOfEffect)).append("\n\n");
 
-        sb.append("【属性ベクトル】\n");
-        String[] attrNames = { "Heat", "Cold", "Motion", "Entropy", "Divine" };
+        sb.append("【ローカル推定の属性ベクトル】（参考値・AIで再評価してください）\n");
+        String[] attrNames = { "Heat(火)", "Cold(氷)", "Motion(雷/風)", "Entropy(混沌)", "Divine(神聖)" };
         for (int i = 0; i < Math.min(attributes.length, attrNames.length); i++) {
             sb.append("- ").append(attrNames[i]).append(": ").append(String.format("%.3f", attributes[i])).append("\n");
         }
-        sb.append("\n");
-
-        sb.append("【スクリプト】\n");
-        for (String line : script) {
-            sb.append("  ").append(line).append("\n");
-        }
-        sb.append("\n");
+        sb.append("※上記はローカル解析の結果です。スクリプトの意味に基づいてAI側で正確に再評価してください。\n\n");
 
         // 学習フィードバック: プレイヤーの好みを外部AIに伝える
         try {
@@ -207,7 +336,9 @@ public class ExternalAIService {
         sb.append("【出力JSON形式】\n");
         sb.append("{\n");
         sb.append(
-                "  \"shape\": \"RING | COMPLEX_CIRCLE | SPHERE | BEAM | CYLINDER | RIPPLE | PARTICLE_MIST | CUBE | VORTEX\",\n");
+                "  \"attributes\": {\"heat\": 0.0-1.0, \"cold\": 0.0-1.0, \"motion\": 0.0-1.0, \"entropy\": 0.0-1.0, \"divine\": 0.0-1.0},\n");
+        sb.append(
+                "  \"shape\": \"RING | COMPLEX_CIRCLE | SPHERE | BEAM | CYLINDER | RIPPLE | PARTICLE_MIST | CUBE | VORTEX | CONE | LIGHTNING | CRYSTAL\",\n");
         sb.append(
                 "  \"animationType\": \"EXPAND_FADE | CONVERGE | SUSTAIN_SPIN | PULSE | RISE | SHOOT_AHEAD | IMPLODE | BEAM_EXTEND | FIXED\",\n");
         sb.append("  \"mainColor\": {\"r\": 0.0-1.0, \"g\": 0.0-1.0, \"b\": 0.0-1.0},\n");
@@ -219,8 +350,18 @@ public class ExternalAIService {
         sb.append("  \"isSolid\": false,\n");
         sb.append("  \"layerCount\": 1,\n");
         sb.append("  \"rotationSpeed\": 1.0,\n");
-        sb.append("  \"density\": 1.0\n");
+        sb.append("  \"density\": 1.0,\n");
+        sb.append("  \"shockwave\": false,\n");
+        sb.append("  \"trailLength\": 0,\n");
+        sb.append("  \"blockEffect\": \"NONE | BURN | FREEZE | EXPLODE | BEAM | BARRIER\",\n");
+        sb.append("  \"residualType\": \"NONE | HEAT | FROST | ELECTRIC | CHAOS | HOLY\",\n");
+        sb.append("  \"residualDuration\": 0\n");
         sb.append("}\n");
+        sb.append("※attributes: スクリプトの意味から判断した5属性の強度(0.0-1.0)。必ずスクリプトの単語に基づいて判断すること。\n");
+        sb.append("※blockEffect: この魔法がワールドのブロックに与える影響。\n");
+        sb.append("※residualType: 魔法消滅後に残留する効果場のタイプ。\n");
+        sb.append("※shockwave: RADIAL爆発時に衝撃波リングを表示するか。\n");
+        sb.append("※trailLength: DIRECTIONAL時の残像トレイルの数(0-5)。\n");
 
         return sb.toString();
     }
@@ -391,6 +532,109 @@ public class ExternalAIService {
         if (json.has("isSolid"))
             meta.isSolid = json.get("isSolid").getAsBoolean();
 
+        // ■ AI返却の属性値をrawVectorに格納
+        if (json.has("attributes")) {
+            try {
+                JsonObject attrs = json.getAsJsonObject("attributes");
+                meta.rawVector = new float[5];
+                meta.rawVector[0] = attrs.has("heat") ? Mth.clamp(attrs.get("heat").getAsFloat(), 0, 1) : 0;
+                meta.rawVector[1] = attrs.has("cold") ? Mth.clamp(attrs.get("cold").getAsFloat(), 0, 1) : 0;
+                meta.rawVector[2] = attrs.has("motion") ? Mth.clamp(attrs.get("motion").getAsFloat(), 0, 1) : 0;
+                meta.rawVector[3] = attrs.has("entropy") ? Mth.clamp(attrs.get("entropy").getAsFloat(), 0, 1) : 0;
+                meta.rawVector[4] = attrs.has("divine") ? Mth.clamp(attrs.get("divine").getAsFloat(), 0, 1) : 0;
+                System.out.println("[External AI] AI attributes: heat=" + meta.rawVector[0]
+                        + " cold=" + meta.rawVector[1] + " motion=" + meta.rawVector[2]
+                        + " entropy=" + meta.rawVector[3] + " divine=" + meta.rawVector[4]);
+            } catch (Exception e) {
+                System.err.println("[External AI] Failed to parse attributes: " + e.getMessage());
+            }
+        }
+
+        return meta;
+    }
+
+    /**
+     * デバッグモード用: ダミーの推論結果を生成する
+     */
+    private VisualMetadata createMockData(List<String> script) {
+        // キーワードに基づいて簡易的に分岐
+        String joined = String.join(" ", script).toLowerCase();
+
+        VisualMetadata meta = new VisualMetadata();
+        meta.rawVector = new float[5];
+
+        if (joined.contains("fire") || joined.contains("explosion") || joined.contains("bomb")
+                || joined.contains("heat") || joined.contains("extream")) {
+            meta.shape = EnumMagicShape.SPHERE;
+            meta.mainColor = new Vector3f(1.0f, 0.2f, 0.0f); // Red
+            meta.subColor = new Vector3f(1.0f, 0.8f, 0.0f); // Orange
+            meta.layerCount = 3;
+            meta.scale = 2.0f;
+            meta.rawVector[0] = 0.9f; // Heat
+            meta.hasLightning = true;
+        } else if (joined.contains("ice") || joined.contains("cold") || joined.contains("freeze")
+                || joined.contains("water") || joined.contains("blizzard")) {
+            meta.shape = EnumMagicShape.CRYSTAL;
+            meta.mainColor = new Vector3f(0.2f, 0.6f, 1.0f); // Blue
+            meta.subColor = new Vector3f(0.8f, 0.9f, 1.0f); // White
+            meta.layerCount = 2;
+            meta.scale = 1.6f;
+            meta.rawVector[1] = 0.9f; // Cold
+            meta.isSpiky = true;
+        } else if (joined.contains("lightning") || joined.contains("shock") || joined.contains("thunder")
+                || joined.contains("motion") || joined.contains("charge")) {
+            meta.shape = EnumMagicShape.LIGHTNING;
+            meta.mainColor = new Vector3f(1.0f, 1.0f, 0.2f); // Yellow
+            meta.subColor = new Vector3f(0.5f, 0.5f, 1.0f); // Blue-Violet
+            meta.layerCount = 4;
+            meta.scale = 1.8f;
+            meta.rawVector[2] = 0.9f; // Motion
+            meta.hasLightning = true;
+        } else if (joined.contains("beam") || joined.contains("laser") || joined.contains("ray")
+                || joined.contains("pierce")) {
+            meta.shape = EnumMagicShape.BEAM;
+            meta.mainColor = new Vector3f(1.0f, 0.0f, 0.8f); // Magenta
+            meta.subColor = new Vector3f(1.0f, 1.0f, 1.0f); // White
+            meta.layerCount = 2;
+            meta.scale = 1.2f;
+            meta.rawVector[2] = 0.8f; // Motion
+        } else if (joined.contains("void") || joined.contains("chaos") || joined.contains("dark")
+                || joined.contains("black") || joined.contains("gravity")) {
+            // VORTEXがあれば使用、なければSPHERE
+            try {
+                meta.shape = EnumMagicShape.valueOf("VORTEX");
+            } catch (IllegalArgumentException e) {
+                meta.shape = EnumMagicShape.SPHERE;
+            }
+            meta.mainColor = new Vector3f(0.1f, 0.0f, 0.2f); // Dark Violet
+            meta.subColor = new Vector3f(0.3f, 0.0f, 0.0f); // Dark Red
+            meta.layerCount = 5;
+            meta.scale = 2.5f;
+            meta.rawVector[3] = 1.0f; // Entropy
+            meta.isWavy = true;
+        } else if (joined.contains("holy") || joined.contains("light") || joined.contains("divine")
+                || joined.contains("heal") || joined.contains("god")) {
+            try {
+                meta.shape = EnumMagicShape.valueOf("RING");
+            } catch (IllegalArgumentException e) {
+                meta.shape = EnumMagicShape.SPHERE;
+            }
+            meta.mainColor = new Vector3f(1.0f, 0.9f, 0.2f); // Gold
+            meta.subColor = new Vector3f(1.0f, 1.0f, 0.8f); // Light Yellow
+            meta.layerCount = 2;
+            meta.scale = 3.0f;
+            meta.rawVector[4] = 1.0f; // Divine
+        } else {
+            // Default: Generic Magic Ball
+            meta.shape = EnumMagicShape.SPHERE;
+            meta.mainColor = new Vector3f(0.1f, 0.8f, 0.4f); // Emerald
+            meta.subColor = new Vector3f(0.0f, 0.3f, 0.1f); // Dark Green
+            meta.layerCount = 2;
+            meta.scale = 1.0f;
+            meta.rawVector[4] = 0.3f;
+        }
+
+        System.out.println("[External AI] Mock data created: Shape=" + meta.shape + " Color=" + meta.mainColor);
         return meta;
     }
 

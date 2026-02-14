@@ -21,9 +21,16 @@ public class ExternalAIConfig {
 
     // --- 設定フィールド ---
     public boolean enabled = false;
-    public String apiUrl = "https://api.openai.com/v1/chat/completions";
-    public String apiKey = "";
-    public String model = "gpt-4o-mini";
+    // ■ デバッグモード（APIを使用せずにダミー結果を返す）
+    public boolean debugMode = false;
+//    public String apiUrl = "https://api.openai.com/v1/chat/completions";
+//    public String apiKey = "";
+//    public String model = "gpt-4o-mini";
+//    public int timeoutSeconds = 30;
+//    public int maxCacheSize = 256;
+    public String apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=AIzaSyCKc1MqGck74bk_uSUC_rZeYoYQFXYvo7I";
+    public String apiKey = "AIzaSyCKc1MqGck74bk_uSUC_rZeYoYQFXYvo7I";
+    public String model = "gemini-2.5-flash-lite";
     public int timeoutSeconds = 30;
     public int maxCacheSize = 256;
 

@@ -4,6 +4,8 @@ import com.COLLABOMOD.collabomod.learning.AnalysisEngine;
 import com.COLLABOMOD.collabomod.learning.CardinalLearningManager;
 import com.COLLABOMOD.collabomod.magic.PhysicsMetadata;
 import com.COLLABOMOD.collabomod.magic.VisualMetadata;
+import com.COLLABOMOD.collabomod.magic.WorldEffectHelper;
+import net.minecraft.core.BlockPos;
 import com.COLLABOMOD.collabomod.register.EntityRegister; // エンティティ登録クラスへの参照(環境に合わせて修正してください)
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -27,10 +29,14 @@ import java.util.List;
 public class EntitySciencePhenomenon extends Entity {
 
     // NBTタグを同期するためのデータアクセサ
-    private static final EntityDataAccessor<CompoundTag> VISUAL_DATA = SynchedEntityData.defineId(EntitySciencePhenomenon.class, EntityDataSerializers.COMPOUND_TAG);
-    private static final EntityDataAccessor<CompoundTag> COMMAND_LIST_DATA = SynchedEntityData.defineId(EntitySciencePhenomenon.class, EntityDataSerializers.COMPOUND_TAG);
-    private static final EntityDataAccessor<CompoundTag> PHYSICS_DATA = SynchedEntityData.defineId(EntitySciencePhenomenon.class, EntityDataSerializers.COMPOUND_TAG);
-    private static final EntityDataAccessor<Integer> CASTER_ID = SynchedEntityData.defineId(EntitySciencePhenomenon.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<CompoundTag> VISUAL_DATA = SynchedEntityData
+            .defineId(EntitySciencePhenomenon.class, EntityDataSerializers.COMPOUND_TAG);
+    private static final EntityDataAccessor<CompoundTag> COMMAND_LIST_DATA = SynchedEntityData
+            .defineId(EntitySciencePhenomenon.class, EntityDataSerializers.COMPOUND_TAG);
+    private static final EntityDataAccessor<CompoundTag> PHYSICS_DATA = SynchedEntityData
+            .defineId(EntitySciencePhenomenon.class, EntityDataSerializers.COMPOUND_TAG);
+    private static final EntityDataAccessor<Integer> CASTER_ID = SynchedEntityData
+            .defineId(EntitySciencePhenomenon.class, EntityDataSerializers.INT);
 
     // ローカルキャッシュ (毎フレームNBT解析するのを防ぐため)
     private PhysicsMetadata physicsCache = new PhysicsMetadata();
@@ -167,7 +173,7 @@ public class EntitySciencePhenomenon extends Entity {
         if (!this.level.isClientSide) {
             float radius = vis.scale * 0.5f;
             if (phy.forceType == PhysicsMetadata.EnumForceType.RADIAL) {
-                float progress = Math.min(1.0f, (float)lifeTime / 10.0f);
+                float progress = Math.min(1.0f, (float) lifeTime / 10.0f);
                 radius = vis.scale * progress * 2.0f;
             }
 
@@ -176,8 +182,10 @@ public class EntitySciencePhenomenon extends Entity {
             int casterId = this.entityData.get(CASTER_ID);
 
             for (Entity target : targets) {
-                if (target.getId() == casterId && lifeTime < 10) continue;
-                if (target instanceof EntitySciencePhenomenon) continue;
+                if (target.getId() == casterId && lifeTime < 10)
+                    continue;
+                if (target instanceof EntitySciencePhenomenon)
+                    continue;
 
                 if (phy.forceType == PhysicsMetadata.EnumForceType.RADIAL) {
                     if (!hasExploded) {
@@ -197,6 +205,9 @@ public class EntitySciencePhenomenon extends Entity {
             if (phy.forceType == PhysicsMetadata.EnumForceType.RADIAL && !targets.isEmpty()) {
                 hasExploded = true;
             }
+
+            // ■ ブロック影響
+            applyBlockEffect(phy, vis, radius);
         }
     }
 
@@ -208,8 +219,50 @@ public class EntitySciencePhenomenon extends Entity {
             VisualMetadata vis = getVisualMetadata();
             float score = AnalysisEngine.calculateConsistencyScore(phy, vis);
             CardinalLearningManager.getInstance().recordExperience(vis.rawVector, phy, vis, score);
+
+            // ■ Phase B: 残留効果フィールドの生成
+            spawnResidualField(phy, vis);
         }
         super.remove(reason);
+    }
+
+    private void spawnResidualField(PhysicsMetadata phy, VisualMetadata vis) {
+        ResidualField.FieldType fieldType = null;
+        float damage = phy.energy * 0.05f;
+
+        // 属性から残留効果を決定
+        if (vis.rawVector != null && vis.rawVector.length >= 5) {
+            float wHeat = vis.rawVector[0];
+            float wCold = vis.rawVector[1];
+            float wEntropy = vis.rawVector[3];
+            float wDivine = vis.rawVector[4];
+
+            if (wHeat > 0.5f || phy.temperature > 1500.0f) {
+                fieldType = ResidualField.FieldType.HEAT;
+            } else if (wCold > 0.5f || phy.temperature < 100.0f) {
+                fieldType = ResidualField.FieldType.FROST;
+            } else if (wEntropy > 0.5f) {
+                fieldType = ResidualField.FieldType.CHAOS;
+            } else if (wDivine > 0.5f) {
+                fieldType = ResidualField.FieldType.HOLY;
+            } else if (phy.energy > 80.0f) {
+                fieldType = ResidualField.FieldType.ELECTRIC;
+            }
+        } else if (phy.temperature > 1500.0f) {
+            fieldType = ResidualField.FieldType.HEAT;
+        } else if (phy.temperature < 100.0f) {
+            fieldType = ResidualField.FieldType.FROST;
+        }
+
+        if (fieldType != null) {
+            float radius = Math.max(vis.scale, phy.areaOfEffect) * 0.8f;
+            int duration = 60 + (int) (phy.energy * 0.5f);
+            ResidualField field = new ResidualField(
+                    com.COLLABOMOD.collabomod.register.EntityRegister.RESIDUAL_FIELD.get(),
+                    this.level, fieldType, radius, duration, damage);
+            field.setPos(this.getX(), this.getY(), this.getZ());
+            this.level.addFreshEntity(field);
+        }
     }
 
     public void setCommandList(ListTag commandList) {
@@ -219,6 +272,11 @@ public class EntitySciencePhenomenon extends Entity {
     }
 
     private void applyPhysicsEffect(Entity target, PhysicsMetadata phy) {
+        // ■ Phase C: 属性ダメージシステム
+        VisualMetadata vis = getVisualMetadata();
+        float[] attrs = (vis.rawVector != null && vis.rawVector.length >= 5) ? vis.rawVector : new float[5];
+
+        // --- 基本物理ダメージ ---
         if (phy.temperature > 1000.0F) {
             target.setSecondsOnFire(5);
             target.hurt(DamageSource.IN_FIRE, phy.energy * 0.05F);
@@ -239,6 +297,110 @@ public class EntitySciencePhenomenon extends Entity {
 
         if (phy.energy > 0) {
             target.hurt(DamageSource.MAGIC, phy.energy * 0.1F);
+        }
+
+        // --- 属性ボーナスダメージ ---
+        if (target instanceof LivingEntity living) {
+            float baseDmg = phy.energy * 0.08f;
+            float wHeat = attrs[0];
+            float wCold = attrs[1];
+            float wMotion = attrs[2];
+            float wEntropy = attrs[3];
+            float wDivine = attrs[4];
+
+            // 火属性: 燃焼延長 + DoTダメージ
+            if (wHeat > 0.3f) {
+                target.setSecondsOnFire((int) (wHeat * 10));
+                target.hurt(DamageSource.IN_FIRE, baseDmg * wHeat);
+            }
+
+            // 氷属性: 深い凍結 + 移動速度低下
+            if (wCold > 0.3f) {
+                target.setTicksFrozen((int) (wCold * 300));
+                living.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+                        net.minecraft.world.effect.MobEffects.MOVEMENT_SLOWDOWN, (int) (wCold * 100), 2));
+            }
+
+            // 雷属性 (Motion): 雷ダメージ + 発光
+            if (wMotion > 0.3f) {
+                target.hurt(DamageSource.LIGHTNING_BOLT, baseDmg * wMotion * 1.5f);
+                living.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+                        net.minecraft.world.effect.MobEffects.GLOWING, (int) (wMotion * 60), 0));
+            }
+
+            // 混沌属性: ランダム状態異常
+            if (wEntropy > 0.3f) {
+                int count = (int) (wEntropy * 3);
+                for (int i = 0; i < count; i++) {
+                    int dice = this.level.random.nextInt(5);
+                    int dur = (int) (wEntropy * 80);
+                    switch (dice) {
+                        case 0 -> living.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+                                net.minecraft.world.effect.MobEffects.POISON, dur, 0));
+                        case 1 -> living.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+                                net.minecraft.world.effect.MobEffects.LEVITATION, dur / 2, 0));
+                        case 2 -> living.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+                                net.minecraft.world.effect.MobEffects.BLINDNESS, dur, 0));
+                        case 3 -> living.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+                                net.minecraft.world.effect.MobEffects.CONFUSION, dur, 0));
+                        case 4 -> living.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+                                net.minecraft.world.effect.MobEffects.WEAKNESS, dur, 1));
+                    }
+                }
+            }
+
+            // 神聖属性: アンデッド特効、通常は回復
+            if (wDivine > 0.3f) {
+                if (living.isInvertedHealAndHarm()) {
+                    // アンデッド: 大ダメージ
+                    target.hurt(DamageSource.MAGIC, baseDmg * wDivine * 3.0f);
+                } else {
+                    // 通常: 回復 (味方効果)
+                    living.heal(baseDmg * wDivine * 0.5f);
+                }
+            }
+        }
+    }
+
+    /**
+     * ■ Phase A: ブロック影響
+     */
+    private void applyBlockEffect(PhysicsMetadata phy, VisualMetadata vis, float radius) {
+        if (this.level.isClientSide)
+            return;
+        // 毎tickではなく一定間隔で実行（サーバー負荷軽減）
+        if (this.lifeTime % 5 != 0)
+            return;
+
+        BlockPos center = this.blockPosition();
+        float effectRadius = Math.max(radius, phy.areaOfEffect);
+
+        // 高温: 着火、溶岩化
+        if (phy.temperature > 1500.0f) {
+            WorldEffectHelper.applyHeatEffect(this.level, center, effectRadius, phy.temperature);
+        }
+
+        // 低温: 凍結、氷化
+        if (phy.temperature < 100.0f) {
+            WorldEffectHelper.applyFreezeEffect(this.level, center, effectRadius);
+        }
+
+        // 爆発: RADIAL + 高エネルギー
+        if (phy.forceType == PhysicsMetadata.EnumForceType.RADIAL && phy.energy > 100.0f && !hasExploded) {
+            WorldEffectHelper.applyExplosiveEffect(this.level, center, effectRadius, phy.energy);
+        }
+
+        // ビーム貫通: DIRECTIONAL + 高速度
+        if (phy.forceType == PhysicsMetadata.EnumForceType.DIRECTIONAL && phy.velocity > 5.0f) {
+            Vec3 dir = this.getDeltaMovement().normalize();
+            if (dir.lengthSqr() > 0.01) {
+                WorldEffectHelper.applyBeamEffect(this.level, this.position(), dir, effectRadius * 2.0f, phy.energy);
+            }
+        }
+
+        // バリア: FIELD
+        if (phy.forceType == PhysicsMetadata.EnumForceType.FIELD && phy.isSolid && this.lifeTime == 5) {
+            WorldEffectHelper.applyBarrierEffect(this.level, center, effectRadius);
         }
     }
 
